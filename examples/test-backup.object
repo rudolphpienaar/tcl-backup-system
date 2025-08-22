@@ -1,0 +1,32 @@
+name>test-backup
+archiveDate>Mon Aug 18 15:00:00 EST 2025
+workingDir>/root/backup_logs
+currentSet,monthly>0
+currentSet,weekly>0
+currentSet,daily>0
+currentSet,none>0
+totalSet,monthly>0
+totalSet,weekly>3
+totalSet,daily>7
+totalSet,none>0
+rules,Mon>daily
+rules,Tue>daily
+rules,Wed>daily
+rules,Thu>daily
+rules,Fri>daily
+rules,Sat>weekly
+rules,Sun>none
+currentRule>none
+remoteHost>10.0.0.12
+remoteUser>root
+remoteDevice>/root/backup_data
+remoteScriptDir>/root/arch/scripts
+rsh>ssh
+adminUser>admin@yourdomain.com
+notifyTape>echo 'Starting backup operation'
+notifyTar>echo 'Starting archive creation'
+notifyError>echo 'Backup error occurred'
+partitions>192.0.0.2:/etc,192.0.0.2:/var/tmp
+listFileDir>/tmp/backup_lists
+status>
+command>

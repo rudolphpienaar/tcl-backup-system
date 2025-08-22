@@ -1,0 +1,38 @@
+adminUser>          admin@yourdomain.com                              
+archiveDate>        Tue Aug 19 08:54:03 AM EDT 2025                   
+command>            offline                                           
+currentRule>        daily                                             
+
+currentSet,daily>   1                                                 
+currentSet,monthly> 0                                                 
+currentSet,none>    0                                                 
+currentSet,weekly>  0                                                 
+
+listFileDir>        /tmp/backup_lists                                 
+name>               test-backup-local                                 
+notifyError>        echo 'Backup error occurred'                      
+notifyTape>         echo 'Starting backup operation'                  
+notifyTar>          echo 'Starting archive creation'                  
+partitions>         192.0.0.2:/etc,192.0.0.2:/var/tmp                 
+remoteDevice>       /root/backup_data                                 
+remoteHost>         192.0.0.2                                         
+remoteScriptDir>    /root/backup_mgr                                  
+remoteUser>         root                                              
+rsh>                ssh                                               
+
+rules,Fri>          daily                                             
+rules,Mon>          daily                                             
+rules,Sat>          weekly                                            
+rules,Sun>          none                                              
+rules,Thu>          daily                                             
+rules,Tue>          daily                                             
+rules,Wed>          daily                                             
+
+status>             ok                                                
+
+totalSet,daily>     7                                                 
+totalSet,monthly>   0                                                 
+totalSet,none>      0                                                 
+totalSet,weekly>    3                                                 
+
+workingDir>         /root/backup_logs                                 
