@@ -1,0 +1,59 @@
+---
+# Backup Object Schema Definition
+schema_version: "1.0"
+object_type: "legacy"
+
+field_mappings:
+  # Core
+  backupName: "name"
+  lastArchiveDate: "archiveDate"
+  objectType: "objectType"
+
+  # Manager-side configuration
+  manager:
+    logDirectory: "workingDir"
+    hostIP: "remoteHost"
+    user: "remoteUser"
+    storageDevice: "remoteDevice"
+    notifications:
+      tapeCmd: "notifyTape"
+      archiveCmd: "notifyTar"
+      errorCmd: "notifyError"
+
+  # Node-side configuration
+  node:
+    scriptPath: "remoteScriptDir"
+    sshCommand: "rsh"
+    backupPartitions: "partitions"
+    incrementalListDir: "listFileDir"
+
+  # Administration
+  adminEmail: "adminUser"
+
+  # Runtime state
+  runtime:
+    currentRule: "currentRule"
+    lastStatus: "status"
+    lastCommand: "command"
+
+  # Set rotation tracking
+  sets:
+    daily:
+      currentIndex: "currentSet,daily"
+      totalCount: "totalSet,daily"
+    weekly:
+      currentIndex: "currentSet,weekly"
+      totalCount: "totalSet,weekly"
+    monthly:
+      currentIndex: "currentSet,monthly"
+      totalCount: "totalSet,monthly"
+
+  # Weekly backup schedule rules
+  schedule:
+    monday: "rules,Mon"
+    tuesday: "rules,Tue"
+    wednesday: "rules,Wed"
+    thursday: "rules,Thu"
+    friday: "rules,Fri"
+    saturday: "rules,Sat"
+    sunday: "rules,Sun"
