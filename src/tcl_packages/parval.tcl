@@ -116,60 +116,81 @@ if {![info exists ::arr_PARVAL]} {
     set ::arr_PARVAL(0) 0
 }
 
-proc PARVAL_build {name argv {cs "--"} {so "0"}} {
-#
-# ARGS
-# name          in      PARVAL instance name
-# argv          in      command line arguments list
-# cs            in (opt) command string prefix (default "--")
-# so            in (opt) option spaces flag (default "0")
-# arr_PARVAL    return  initialized PARVAL array
-#
-# DESC
-# Creates new PARVAL instance for command line parsing. Initializes
-# the global arr_PARVAL array with instance data including command
-# string prefix, argument list, and parsing state.
-#
+proc CLI_parse {clargs argv} {
+    #
+    # ARGS
+    # argv          in      command line arguments
+    # parsed        return  1 if valid, 0 if error/help shown
+    #
+    # DESC
+    # Parses command line arguments and populates global arr_PARVAL.
+    # Handles --schema and --help options. Returns 0 if help shown
+    # or error occurred, 1 if parsing successful.
+    #
     global arr_PARVAL
 
-    set arr_PARVAL($name,cs)        $cs
-    set arr_PARVAL($name,argv)      $argv
+    if {[catch {PARVAL_build $clargs $argv "--"} error]} {
+        puts stderr "Error parsing arguments: $error"
+        return 0
+    }
+
+    return 1
+}
+
+proc PARVAL_build {name argv {cs "--"} {so "0"}} {
+    #
+    # ARGS
+    # name          in      PARVAL instance name
+    # argv          in      command line arguments list
+    # cs            in (opt) command string prefix (default "--")
+    # so            in (opt) option spaces flag (default "0")
+    # arr_PARVAL    return  initialized PARVAL array
+    #
+    # DESC
+    # Creates new PARVAL instance for command line parsing. Initializes
+    # the global arr_PARVAL array with instance data including command
+    # string prefix, argument list, and parsing state.
+    #
+    global arr_PARVAL
+
+    set arr_PARVAL($name,cs) $cs
+    set arr_PARVAL($name,argv) $argv
     set arr_PARVAL($name,parameter) ""
-    set arr_PARVAL($name,value)     ""
-    set arr_PARVAL($name,argnum)    -1
-    set arr_PARVAL($name,so)        $so
+    set arr_PARVAL($name,value) ""
+    set arr_PARVAL($name,argnum) -1
+    set arr_PARVAL($name,so) $so
 
     return arr_PARVAL
 }
 
 proc PARVAL_nullify {name {so "0"}} {
-#
-# ARGS
-# name          in      PARVAL instance name
-# so            in (opt) option spaces flag (default "0")
-#
-# DESC
-# Resets PARVAL instance to default values, clearing any previous
-# parsing state while preserving the instance name.
-#
+    #
+    # ARGS
+    # name          in      PARVAL instance name
+    # so            in (opt) option spaces flag (default "0")
+    #
+    # DESC
+    # Resets PARVAL instance to default values, clearing any previous
+    # parsing state while preserving the instance name.
+    #
     global arr_PARVAL
 
-    set arr_PARVAL($name,cs)        "--"
+    set arr_PARVAL($name,cs) "--"
     set arr_PARVAL($name,parameter) ""
-    set arr_PARVAL($name,value)     ""
-    set arr_PARVAL($name,argnum)    -1
-    set arr_PARVAL($name,so)        $so
+    set arr_PARVAL($name,value) ""
+    set arr_PARVAL($name,argnum) -1
+    set arr_PARVAL($name,so) $so
 }
 
 proc PARVAL_print {name} {
-#
-# ARGS
-# name          in      PARVAL instance name
-#
-# DESC
-# Prints debug information for PARVAL instance including all
-# internal state variables and the complete argument list.
-#
+    #
+    # ARGS
+    # name          in      PARVAL instance name
+    #
+    # DESC
+    # Prints debug information for PARVAL instance including all
+    # internal state variables and the complete argument list.
+    #
     global arr_PARVAL
 
     puts stdout "PARVAL:\t\t$name"
@@ -182,17 +203,17 @@ proc PARVAL_print {name} {
 }
 
 proc PARVAL_interpret {name option} {
-#
-# ARGS
-# name          in      PARVAL instance name
-# option        in      command line option to search for
-#
-# DESC
-# Parses the argument list for the specified option and extracts
-# its value if present. Sets argnum to -1 if option not found,
-# otherwise sets parameter, value, and argnum appropriately.
-# Handles both couplet (--option value) and boolean (--option) forms.
-#
+    #
+    # ARGS
+    # name          in      PARVAL instance name
+    # option        in      command line option to search for
+    #
+    # DESC
+    # Parses the argument list for the specified option and extracts
+    # its value if present. Sets argnum to -1 if option not found,
+    # otherwise sets parameter, value, and argnum appropriately.
+    # Handles both couplet (--option value) and boolean (--option) forms.
+    #
     global arr_PARVAL
 
     PARVAL_nullify $name $arr_PARVAL($name,so)
@@ -237,17 +258,17 @@ proc PARVAL_interpret {name option} {
 }
 
 proc PARVAL_return {name option {default ""}} {
-#
-# ARGS
-# name          in      PARVAL instance name
-# option        in      command line option to retrieve
-# default       in (opt) default value if option not found
-# value         return  option value or default
-#
-# DESC
-# Convenience function that interprets option and returns its value.
-# Returns actual value (including "1" for boolean flags) or default.
-#
+    #
+    # ARGS
+    # name          in      PARVAL instance name
+    # option        in      command line option to retrieve
+    # default       in (opt) default value if option not found
+    # value         return  option value or default
+    #
+    # DESC
+    # Convenience function that interprets option and returns its value.
+    # Returns actual value (including "1" for boolean flags) or default.
+    #
     global arr_PARVAL
 
     PARVAL_interpret $name $option
@@ -258,26 +279,28 @@ proc PARVAL_return {name option {default ""}} {
 }
 
 proc PARVAL_passedFlags {context} {
-#
-# ARGS
-# context         in              parval context name (e.g. "clargs")
-# flags           return          list of CLI flags that were actually passed
-#
-# DESC
-# Iterates through the argument list stored in the given context
-# and returns a list of all arguments that are formatted as flags
-# (i.e., prefixed with the context's command string).
-#
+    #
+    # ARGS
+    # context         in              parval context name (e.g. "clargs")
+    # flags           return          list of CLI flags that were actually passed
+    #
+    # DESC
+    # Iterates through the argument list stored in the given context
+    # and returns a list of all arguments that are formatted as flags
+    # (i.e., prefixed with the context's command string).
+    #
     global arr_PARVAL
     set passedFlags {}
 
-    if {![info exists arr_PARVAL($context,argv)] || \
-        ![info exists arr_PARVAL($context,cs)]} {
+    if {
+        ![info exists arr_PARVAL($context,argv)] ||
+        ![info exists arr_PARVAL($context,cs)]
+    } {
         return $passedFlags
     }
 
     set argv $arr_PARVAL($context,argv)
-    set cs   $arr_PARVAL($context,cs)
+    set cs $arr_PARVAL($context,cs)
     set csLen [string length $cs]
 
     foreach arg $argv {

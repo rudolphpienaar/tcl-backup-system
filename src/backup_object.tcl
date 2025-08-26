@@ -15,7 +15,7 @@ lappend auto_path [file join [file dirname [info script]] tcl_packages]
 package require yaml
 package require parval
 
-set SELF "backup_object.tcl"
+set ::SELF [file tail [info script]]
 set G_SYNOPSIS "
 
 NAME
@@ -154,33 +154,6 @@ proc backupObject_flattenMappings {mappings prefix flatMapVar} {
     }
 }
 
-proc CLI_parse {clargs argv} {
-    #
-    # ARGS
-    # argv          in      command line arguments
-    # parsed        return  1 if valid, 0 if error/help shown
-    #
-    # DESC
-    # Parses command line arguments and populates global arr_PARVAL.
-    # Handles --schema and --help options. Returns 0 if help shown
-    # or error occurred, 1 if parsing successful.
-    #
-    global arr_PARVAL G_SYNOPSIS SELF
-
-    if {[catch {PARVAL_build $clargs $argv "--"} error]} {
-        puts stderr "$SELF: Error parsing arguments: $error"
-        return 0
-    }
-
-    # Check for help first
-    if {[PARVAL_return $clargs help "0"]} {
-        puts $G_SYNOPSIS
-        return 0
-    }
-
-    return 1
-}
-
 proc schema_load {schema_file classStruct} {
     global SELF
     upvar 1 $classStruct class
@@ -217,9 +190,10 @@ proc main {} {
     # DESC
     # Main entry point with CLI argument processing
     #
-    global argv
+    global argv G_SYNOPSIS
 
     if {![CLI_parse "clargs" $argv]} {
+        puts $G_SYNOPSIS
         exit 1
     }
 

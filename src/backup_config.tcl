@@ -2,7 +2,7 @@
 # the next line restart with wish \
  exec tclsh "$0" $@
 
-set G_SYNOPSIS "
+set BACKUP_CONFIG_SYNOPSIS "
 
 NAME
 
@@ -11,14 +11,14 @@ NAME
 SYNOPSIS
 
       backup_config.tcl --create <backup_name>          \\
-                        \[--template <template_type>\]
-                        \[--output-dir <directory>\]
-                        \[--daily-sets <count>\]
-                        \[--weekly-sets <count>\]
-                        \[--monthly-sets <count>\]
-                        \[--non-interactive\]
-                        \[--validate-only\]
-                        \[--no-color\]
+                        \[--template <template_type>\]  \\
+                        \[--output-dir <directory>\]    \\
+                        \[--daily-sets <count>\]        \\
+                        \[--weekly-sets <count>\]       \\
+                        \[--monthly-sets <count>\]      \\
+                        \[--non-interactive\]           \\
+                        \[--validate-only\]             \\
+                        \[--no-color\]                  \\
                         \[--help\]
 
 DESCRIPTION
@@ -78,6 +78,24 @@ package require parval
 # Global variables
 set ::SELF [file tail [info script]]
 catch {source [file join [file dirname [info script]] backup_object.tcl]}
+
+# Main data structure
+# This structure maps:
+# internal member names/variables (Col 1)
+# to CLI flag/names (Col 2)
+# to default values (Col 3)
+set lst_members_flags_defaults {
+    config_name     create          ""
+    template_type   template        ""
+    output_dir      output-dir      ""
+    daily_sets      daily-sets      25
+    weekly_sets     weekly-sets     5
+    monthly_sets    monthly-sets    12
+    non_interactive non-interactive 0
+    validate_only   validate-only   0
+    no_color        no-color        0
+    show_help       help            0
+}
 set config_name ""
 set template_type ""
 set output_dir "/root/backup_data"
@@ -144,18 +162,8 @@ set errors {
 }
 
 ###\\\
-# Function definitions - MOVED TO TOP
+# Function definitions
 ###///
-
-proc synopsis_show {} {
-    #
-    # DESC
-    # Display usage information and exit
-    #
-    global G_SYNOPSIS
-    puts $G_SYNOPSIS
-    exit 0
-}
 
 proc errors_validate {} {
     #
@@ -606,9 +614,12 @@ proc storage_gather {class} {
 
     if {
         [catch {
-            set config(workingDir) [user_prompt "Log directory" "/root/backup_logs" directory_validate]
-            set config(archiveDir) [user_prompt "Archive storage directory" $output_dir directory_validate]
-            set config(listFileDir) [user_prompt "Incremental file list directory" "/tmp/backup_lists"]
+            set config(workingDir) \
+                [user_prompt "Log directory" "/root/backup_logs" directory_validate]
+            set config(archiveDir) \
+                [user_prompt "Archive storage directory" $output_dir directory_validate]
+            set config(listFileDir) \
+                [user_prompt "Incremental file list directory" "/tmp/backup_lists"]
 
             # Configure tape set counts
             if {$daily_sets == ""} {
@@ -646,10 +657,14 @@ proc notifications_gather {class} {
 
     if {
         [catch {
-            set config(adminUser) [user_prompt "Admin email address" "" email_validate]
-            set config(notifyTape) [user_prompt "Tape notification command" "echo 'Starting backup operation'"]
-            set config(notifyTar) [user_prompt "Archive notification command" "echo 'Starting archive creation'"]
-            set config(notifyError) [user_prompt "Error notification command" "echo 'Backup error occurred'"]
+            set config(adminUser) \
+                [user_prompt "Admin email address" "" email_validate]
+            set config(notifyTape) \
+                [user_prompt "Tape notification command" "echo 'Starting backup operation'"]
+            set config(notifyTar) \
+                [user_prompt "Archive notification command" "echo 'Starting archive creation'"]
+            set config(notifyError) \
+                [user_prompt "Error notification command" "echo 'Backup error occurred'"]
         } error]
     } {
         config_error "inputValidation" "Notification configuration: $error"
@@ -912,7 +927,16 @@ proc off {} {
 }
 
 proc class_cliBuild {class parval} {
+    # parval    in  the context of the command line interpreter
+    #
     upvar $class cli
+    global lst_members_flags_defaults
+
+    set lst_memberVars {}
+    set lst_commargs {}
+    set lst_commvalues {}
+
+    list_unzipTriplets $lst_members_flags_defaults lst_memberVars lst_commargs lst_commvalues
 
     # Define the list of all possible command-line flags
     set lst_commargs {
@@ -928,19 +952,24 @@ proc class_cliBuild {class parval} {
     foreach flag $lst_commargs {
         # PARVAL_return will get the value, or an empty string if not present
         # For boolean flags like --help, it will return "1" if present.
+        set val [PARVAL_return $parval $flag ""]
         lappend lst_commvalues [PARVAL_return $parval $flag ""]
     }
 
     # Now, create the 'cli' class using the flags as keys and the parsed values
-    class_Initialise cli $lst_commargs $lst_commvalues
+    class_Initialise cli $lst_memberVars $lst_commvalues
     class_Dump cli
 }
 
 proc main {} {
-    global argv
+    global argv G_SYNOPSIS
 
     if {![CLI_parse "clargs" $argv]} {
         exit 1
+    }
+
+    if {[PARVAL_return "clargs" "help"]} {
+        exit_with $G_SYNOPSIS
     }
 
     errors_validate
