@@ -110,6 +110,12 @@ proc class_Initialise {class struct initdata {filename void}} {
     global delim
     upvar $class arr
 
+    # Check if the global variable has been defined yet
+    if {![info exists delim]} {
+        # It doesn't exist, so we set a default value
+        set delim ">"
+    }
+
     if {![string first lst $struct]} {
         set class_struct [deref $struct "#0"]
     } else {

@@ -10,7 +10,7 @@ NAME
 
 SYNOPSIS
 
-      backup_config.tcl --create <backup_name>
+      backup_config.tcl --create <backup_name>          \\
                         \[--template <template_type>\]
                         \[--output-dir <directory>\]
                         \[--daily-sets <count>\]
@@ -30,42 +30,42 @@ DESCRIPTION
 
 ARGS
 
---create <backup_name>
-      Name of the backup configuration to create. This becomes the filename
-      (with .object extension) and backup set identifier.
+    --create <backup_name>
+          Name of the backup configuration to create. This becomes the filename
+          (with .object extension) and backup set identifier.
 
-\[--template <template_type>\]
-      Load predefined configuration template. Available templates:
-      server, desktop, database, minimal.
+    \[--template <template_type>\]
+          Load predefined configuration template. Available templates:
+          server, desktop, database, minimal.
 
-\[--output-dir <directory>\]
-      Directory where configuration file will be created.
-      Default: /tmp/backup_configs
+    \[--output-dir <directory>\]
+          Directory where configuration file will be created.
+          Default: /tmp/backup_configs
 
-\[--daily-sets <count>\]
-      Number of daily backup tapes/volumes for rotation.
-      Default: 7
+    \[--daily-sets <count>\]
+          Number of daily backup tapes/volumes for rotation.
+          Default: 7
 
-\[--weekly-sets <count>\]
-      Number of weekly backup tapes/volumes for rotation.
-      Default: 4
+    \[--weekly-sets <count>\]
+          Number of weekly backup tapes/volumes for rotation.
+          Default: 4
 
-\[--monthly-sets <count>\]
-      Number of monthly backup tapes/volumes for rotation.
-      Default: 3
+    \[--monthly-sets <count>\]
+          Number of monthly backup tapes/volumes for rotation.
+          Default: 3
 
-\[--non-interactive\]
-      Use command-line values and defaults without prompting.
-      Default mode is interactive.
+    \[--non-interactive\]
+          Use command-line values and defaults without prompting.
+          Default mode is interactive.
 
-\[--validate-only\]
-      Validate configuration without creating file.
+    \[--validate-only\]
+          Validate configuration without creating file.
 
-\[--no-color\]
-      Disable colored output.
+    \[--no-color\]
+          Disable colored output.
 
-\[--help\]
-      Show this help and exit.
+    \[--help\]
+          Show this help and exit.
 
 "
 
@@ -911,6 +911,31 @@ proc off {} {
     message_log "INFO" "Configuration wizard completed successfully"
 }
 
+proc class_cliBuild {class parval} {
+    upvar $class cli
+
+    # Define the list of all possible command-line flags
+    set lst_commargs {
+        create template output-dir
+        daily-sets weekly-sets monthly-sets
+        non-interactive validate-only no-color help
+    }
+
+    # Create a list to hold the values passed on the command line
+    set lst_commvalues {}
+
+    # Loop through each possible flag and get its value from the command line
+    foreach flag $lst_commargs {
+        # PARVAL_return will get the value, or an empty string if not present
+        # For boolean flags like --help, it will return "1" if present.
+        lappend lst_commvalues [PARVAL_return $parval $flag ""]
+    }
+
+    # Now, create the 'cli' class using the flags as keys and the parsed values
+    class_Initialise cli $lst_commargs $lst_commvalues
+    class_Dump cli
+}
+
 proc main {} {
     global argv
 
@@ -920,6 +945,7 @@ proc main {} {
 
     errors_validate
     colors_setup
+    class_cliBuild ccli clargs
 
     foreach flag [PARVAL_passedFlags "clargs"] {
         puts $flag
