@@ -50,13 +50,13 @@ DESCRIPTION
 
 # TODO
 # o        Need to consider the effect of non-monthly archive sets... They are
-#        based on an incremental record, which if non-existant forces a 
-#        complete backup. Perhaps these incremental records need to be 
+#        based on an incremental record, which if non-existant forces a
+#        complete backup. Perhaps these incremental records need to be
 #        periodically erased?
 #
-#        Perhaps some rule whereby the *first* daily or weekly backup 
+#        Perhaps some rule whereby the *first* daily or weekly backup
 #        per month erased the previous daily and weekly incremental record.
-# 
+#
 # HISTORY
 #
 # 4-20-1998 / 04-24-1998
@@ -67,7 +67,7 @@ DESCRIPTION
 #
 # 6-26-1998
 # o        Tracking down segmentation fault behaviour during monthly
-#        vulcan backups. The tar command will be written to the command 
+#        vulcan backups. The tar command will be written to the command
 #        line and run manually to narrow down the scope of the
 #        error.
 #
@@ -76,19 +76,19 @@ DESCRIPTION
 #        and replaced them with single quotes.
 #
 # 6-30-1998
-# o        Re-implemented the basic archiving mechanism... too many 
-#        difficulties with quoting between tcl grouping commands. Now this 
-#        script creates a child script which contains the archive command 
+# o        Re-implemented the basic archiving mechanism... too many
+#        difficulties with quoting between tcl grouping commands. Now this
+#        script creates a child script which contains the archive command
 #        with necessary quoting. This child is then executed.
 #
-#        Some advantages include cleaner behavior - if the controlling 
-#        `backup_mgr' is killed, the overall backup still proceeds. If the 
-#        child is killed, remote backup stops cleanly with no lingering 
+#        Some advantages include cleaner behavior - if the controlling
+#        `backup_mgr' is killed, the overall backup still proceeds. If the
+#        child is killed, remote backup stops cleanly with no lingering
 #        processes hanging about on the target host.
 #
 # 7-2-1998
-# o        Still getting segmentation violation on large archives. I suspect 
-#        that the tcl interpreter dies while trying to catch the *huge* 
+# o        Still getting segmentation violation on large archives. I suspect
+#        that the tcl interpreter dies while trying to catch the *huge*
 #        output of the tar command.
 #
 #        Two possible solutions:-
@@ -100,13 +100,13 @@ DESCRIPTION
 # 7-13-1998
 # o        Added additional command line parameter, incReset, that
 #        controls whether or not to erase the incremental data base used
-#        by `tar'. For backup sets that do not have a monthly specifier, 
+#        by `tar'. For backup sets that do not have a monthly specifier,
 #        periodic cycling of the incremental file need to be effected - this
 #        is specified with the incReset parameter with `yes' argument.
 #
 #        Note that the decision whether or not to implement this reset is
 #        made by the managing `backup_mgr.tcl' process.
-#        
+#
 # 7-22-1998
 # o        Added archive set name to incremental title.
 #
@@ -128,19 +128,19 @@ DESCRIPTION
 # o        Added -force to all file delete references
 #
 
-lappend auto_path       /root/arch/scripts/tcl_packages
-package require         misc
-package require         parval
+lappend auto_path /root/arch/scripts/tcl_packages
+package require misc
+package require parval
 
 ###\\\
 # Globals --->
 ###///
 
-set SELF                "backup.tcl"
-set tarcmd              ""
-set modFileSys          ""
-set state               flag
-set listedIncremental   ""
+set SELF "backup.tcl"
+set tarcmd ""
+set modFileSys ""
+set state flag
+set listedIncremental ""
 set lst_commargs {
     user host device label filesys currentRule buffer rsh incReset verbose listFileDir
 }
@@ -154,24 +154,23 @@ proc synopsis_show {} {
     global SELF G_SYNOPSIS
 
     puts "$G_SYNOPSIS"
-
 }
 
 proc error_exit {action errorMessage code} {
-#
-# ARGS
-# action                in                action being attempted
-# message               in                message text
-# code                  in                system exit code
-#
-# DESC
-# Simple display of error message and exit
-#
+    #
+    # ARGS
+    # action                in                action being attempted
+    # message               in                message text
+    # code                  in                system exit code
+    #
+    # DESC
+    # Simple display of error message and exit
+    #
     global SELF
 
     puts stderr "\n$SELF:\n\tSorry, but there seems to be an error."
-    puts stderr "\tWhile $action,"                                     
-    puts stderr "\t$errorMessage\n"                                           
+    puts stderr "\tWhile $action,"
+    puts stderr "\t$errorMessage\n"
     synopsis_show
     puts stderr "\n\n\t -- Exiting with code $code -- \n"
     exit $code
@@ -187,14 +186,14 @@ set arr_PARVAL(0) 0
 PARVAL_build commswitch $argv "--" "1"
 foreach element $lst_commargs {
     PARVAL_interpret commswitch $element
-    if { $arr_PARVAL(commswitch,argnum) >= 0 } {
+    if {$arr_PARVAL(commswitch,argnum) >= 0} {
         set $element $arr_PARVAL(commswitch,value)
     }
 }
 
 # Check that all variables have assigned values
 foreach var $lst_commargs {
-    if {[set $var]==""} {
+    if {[set $var] == ""} {
         set action "parsing command line arguments"
         set message "Not all required variables are set!"
         append message "\n\n\tPerhaps I have been called with some flags missing?"
@@ -206,14 +205,14 @@ foreach var $lst_commargs {
 append listFileDir "-"
 append listFileDir [exec hostname]
 if {![file isdirectory $listFileDir]} {file mkdir $listFileDir}
-set child                        "${listFileDir}/archive.sh"
+set child "${listFileDir}/archive.sh"
 
 # Build the tar command
 switch -- [exec uname] {
-    Linux               { append tarcmd "/bin/tar " }
-    FreeBSD             { append tarcmd "/usr/bin/tar " }
-    Darwin              { append tarcmd "/opt/local/bin/tar " }
-    default             { append tarcmd "/bin/tar " }
+    Linux {append tarcmd "/bin/tar "}
+    FreeBSD {append tarcmd "/usr/bin/tar "}
+    Darwin {append tarcmd "/opt/local/bin/tar "}
+    default {append tarcmd "/bin/tar "}
 }
 append tarcmd "--create --file - --totals --gzip "
 #append tarcmd "--block-size 80 "
@@ -225,16 +224,16 @@ append tarcmd "--verbose "
 #}
 
 # Define the incremental reference filename
-set fullhostname                [exec hostname]
-set hostname                    [split $host "."]
-set host                        [lindex $hostname 0]
-set forwardToBack               [exec echo $filesys | sed "s./.:.g"]
-set modFileSys                  [lindex [split $label :] 0]
-append modFileSys               "::$host:"
-append modFileSys               $forwardToBack
-set listedIncremental           ${listFileDir}/$modFileSys
+set fullhostname [exec hostname]
+set hostname [split $host "."]
+set host [lindex $hostname 0]
+set forwardToBack [exec echo $filesys | sed "s./.:.g"]
+set modFileSys [lindex [split $label :] 0]
+append modFileSys "::$host:"
+append modFileSys $forwardToBack
+set listedIncremental ${listFileDir}/$modFileSys
 
-if {$currentRule=="monthly"} {
+if {$currentRule == "monthly"} {
     catch {[file delete -force "$listedIncremental-*"]} result
     append tarcmd "--listed-incremental \"$listedIncremental-monthly\" "
     file delete -force $listedIncremental-monthly
@@ -243,8 +242,8 @@ if {$currentRule=="monthly"} {
         catch {[file delete -force "$listedIncremental-*"]} result
     }
     switch -- $currentRule {
-        weekly         {set base monthly}
-        daily         {set base weekly}
+        weekly {set base monthly}
+        daily {set base weekly}
     }
     append tarcmd "--listed-incremental \"${listedIncremental}-${base}\""
 }
@@ -254,19 +253,19 @@ append tarcmd " \"$filesys\""
 # Check on the $device variable. If this does not contain "/dev"
 #        then assume we are backing up to a hard drive. Change the
 #        $device variable to reflect this.
-set path        [split $device "/"]
-set dev         [lindex $path 1]
+set path [split $device "/"]
+set dev [lindex $path 1]
 
 if {$dev != "dev"} {
-    set date            [exec date]
-    set today           [lindex $date 0]
-    set month           [lindex $date 1]
-    set day             [lindex $date 2]
-    set hour            [lindex $date 3]
-    set year            [lindex $date 5]
+    set date [exec date]
+    set today [lindex $date 0]
+    set month [lindex $date 1]
+    set day [lindex $date 2]
+    set hour [lindex $date 3]
+    set year [lindex $date 5]
     regsub -all ":" $label "_" label2
     regsub -all "/" $label2 "." label3
-    append device       "/${label3}.${currentRule}.${today}.tgz"
+    append device "/${label3}.${currentRule}.${today}.tgz"
 }
 
 # Build the child shell script that will do the actual backup
@@ -279,7 +278,7 @@ puts $childID ""
 puts $childID "# Creation date [exec date]"
 puts $childID "# DO NOT EDIT!"
 puts $childID ""
-puts $childID "$tarcmd | $rsh -l $user $host \'$buffer > \"$device\"\'" 
+puts $childID "$tarcmd | $rsh -l $user $host \'$buffer > \"$device\"\'"
 close $childID
 
 # Now execute the child shell script
@@ -296,12 +295,12 @@ if {$err} {
     error_exit $action $errorMessage 1
 }
 
-if {$currentRule=="monthly"} { 
+if {$currentRule == "monthly"} {
     file copy -force $listedIncremental-monthly $listedIncremental-weekly
 }
 
 # Parse results file for bytes written
 
-set ok [catch {exec grep bytes $listedIncremental.results} bytes] 
+set ok [catch {exec grep bytes $listedIncremental.results} bytes]
 puts stdout $bytes
 exit 0

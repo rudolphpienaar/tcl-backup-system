@@ -77,13 +77,13 @@ package require parval
 
 # Global variables
 set ::SELF [file tail [info script]]
-catch {source [file join [file dirname [info script]] backup_object.tcl]}
+# catch {source [file join [file dirname [info script]] backup_object.tcl]}
 
 # Main data structure
 # This structure maps:
-# internal member names/variables (Col 1)
-# to CLI flag/names (Col 2)
-# to default values (Col 3)
+# internal member variables (Col 1)
+# external  CLI  flag/names (Col 2)
+# internal  default  values (Col 3)
 set lst_members_flags_defaults {
     config_name     create          ""
     template_type   template        ""
@@ -96,26 +96,27 @@ set lst_members_flags_defaults {
     no_color        no-color        0
     show_help       help            0
 }
-set config_name ""
-set template_type ""
-set output_dir "/root/backup_data"
-set daily_sets ""
-set weekly_sets ""
-set monthly_sets ""
-set non_interactive 0
-set validate_only 0
-set no_color 0
-set show_help 0
 
-# Default tape counts
-set DEFAULT_DAILY_SETS 7
-set DEFAULT_WEEKLY_SETS 4
-set DEFAULT_MONTHLY_SETS 3
-
-# CLI parameter list for parval
-set lst_commargs \
-    {create template output-dir daily-sets weekly-sets
-     monthly-sets non-interactive validate-only no-color help}
+# set config_name ""
+# set template_type ""
+# set output_dir "/root/backup_data"
+# set daily_sets ""
+# set weekly_sets ""
+# set monthly_sets ""
+# set non_interactive 0
+# set validate_only 0
+# set no_color 0
+# set show_help 0
+#
+# # Default tape counts
+# set DEFAULT_DAILY_SETS 7
+# set DEFAULT_WEEKLY_SETS 4
+# set DEFAULT_MONTHLY_SETS 3
+#
+# # CLI parameter list for parval
+# set lst_commargs \
+#     {create template output-dir daily-sets weekly-sets
+#      monthly-sets non-interactive validate-only no-color help}
 
 # Error definitions using dictionary with greppable field names
 set errors {
@@ -161,135 +162,138 @@ set errors {
     }
 }
 
+appUtils::init -self $SELF -errors $error_definitions -nocolor "0"
+
 ###\\\
 # Function definitions
 ###///
 
-proc errors_validate {} {
-    #
-    # DESC
-    # Validates that all error definitions in the errors dictionary contain
-    # required fields: ERR_context, ERR_message, and ERR_code
-    #
-    global errors
-
-    if {
-        [catch {
-            dict for {type info} $errors {
-                if {
-                    ![dict exists $info ERR_context] ||
-                    ![dict exists $info ERR_message] ||
-                    ![dict exists $info ERR_code]
-                } {
-                    error "Incomplete error definition for type: $type"
-                }
-
-                # Validate error code is integer
-                set code [dict get $info ERR_code]
-                if {![string is integer $code] || $code < 1} {
-                    error "Invalid error code for type $type: $code (must be positive integer)"
-                }
-            }
-        } error]
-    } {
-        puts stderr "ERROR: Error dictionary validation failed: $error"
-        exit 99
-    }
-}
-
-proc config_error {error_type details {fatal 1}} {
-    #
-    # ARGS
-    # error_type      in              type of error from errors dictionary
-    # details         in              specific error details from system
-    # fatal           in (opt)        1 to exit, 0 to continue (default: 1)
-    #
-    # DESC
-    # Handles configuration errors using dictionary-based error definitions.
-    # Provides rich error context and exits with appropriate code if fatal.
-    #
-    global SELF errors color
-
-    if {![dict exists $errors $error_type]} {
-        puts stderr "${color(red)}INTERNAL ERROR: Unknown error type '$error_type'$color(reset)"
-        puts stderr "Valid error types: [dict keys $errors]"
-        exit 99
-    }
-
-    set error_info [dict get $errors $error_type]
-    set context [dict get $error_info ERR_context]
-    set message [dict get $error_info ERR_message]
-    set code [dict get $error_info ERR_code]
-
-    puts stderr "\n$color(red)$color(bold)$SELF ERROR$color(reset)"
-    puts stderr "\tSorry, but there seems to be an error."
-    puts stderr "\tWhile $context,"
-    puts stderr "\t$message"
-    if {$details != ""} {
-        puts stderr "\t${color(yellow)}Specific error:$color(reset) $details"
-    }
-    puts stderr "\tat [exec date]"
-
-    if {$fatal} {
-        puts stderr "\n${color(red)}Exiting with code $code$color(reset)"
-        exit $code
-    } else {
-        puts stderr "\n${color(yellow)}Continuing despite error (code $code)...$color(reset)"
-    }
-}
-
-proc message_log {level message} {
-    #
-    # ARGS
-    # level           in              log level (INFO, WARN, ERROR)
-    # message         in              message text to log
-    #
-    # DESC
-    # Logs timestamped messages to stdout with level indication and color coding
-    #
-    global color
-    set timestamp [clock format [clock seconds] -format "%Y-%m-%d %H:%M:%S"]
-
-    switch -- $level {
-        "INFO" {
-            puts "$color(blue)\[$timestamp\] $level:$color(reset) $message"
-        }
-        "WARN" {
-            puts "$color(yellow)\[$timestamp\] $level:$color(reset) $message"
-        }
-        "ERROR" {
-            puts "$color(red)\[$timestamp\] $level:$color(reset) $message"
-        }
-        default {
-            puts "\[$timestamp\] $level: $message"
-        }
-    }
-}
-
-proc colors_setup {} {
-    #
-    # DESC
-    # Initialize color support based on terminal capabilities
-    #
-    global color no_color
-
-    # ANSI color codes - always define them
-    if {$no_color} {
-        set color(red) ""
-        set color(green) ""
-        set color(yellow) ""
-        set color(blue) ""
-        set color(bold) ""
-        set color(reset) ""
-    } else {
-        set color(red) "\033\[31m"
-        set color(green) "\033\[32m"
-        set color(yellow) "\033\[33m"
-        set color(blue) "\033\[34m"
-        set color(bold) "\033\[1m"
-        set color(reset) "\033\[0m"
-    }
-}
+# proc errors_validate {} {
+#     #
+#     # DESC
+#     # Validates that all error definitions in the errors dictionary contain
+#     # required fields: ERR_context, ERR_message, and ERR_code
+#     #
+#     global errors
+#
+#     if {
+#         [catch {
+#             dict for {type info} $errors {
+#                 if {
+#                     ![dict exists $info ERR_context] ||
+#                     ![dict exists $info ERR_message] ||
+#                     ![dict exists $info ERR_code]
+#                 } {
+#                     error "Incomplete error definition for type: $type"
+#                 }
+#
+#                 # Validate error code is integer
+#                 set code [dict get $info ERR_code]
+#                 if {![string is integer $code] || $code < 1} {
+#                     error "Invalid error code for type $type: $code (must be positive integer)"
+#                 }
+#             }
+#         } error]
+#     } {
+#         puts stderr "ERROR: Error dictionary validation failed: $error"
+#         exit 99
+#     }
+# }
+#
+# proc config_error {error_type details {fatal 1}} {
+#     #
+#     # ARGS
+#     # error_type      in              type of error from errors dictionary
+#     # details         in              specific error details from system
+#     # fatal           in (opt)        1 to exit, 0 to continue (default: 1)
+#     #
+#     # DESC
+#     # Handles configuration errors using dictionary-based error definitions.
+#     # Provides rich error context and exits with appropriate code if fatal.
+#     #
+#     global SELF errors color
+#
+#     if {![dict exists $errors $error_type]} {
+#         puts stderr "${color(red)}INTERNAL ERROR: Unknown error type '$error_type'$color(reset)"
+#         puts stderr "Valid error types: [dict keys $errors]"
+#         exit 99
+#     }
+#
+#     set error_info [dict get $errors $error_type]
+#     set context [dict get $error_info ERR_context]
+#     set message [dict get $error_info ERR_message]
+#     set code [dict get $error_info ERR_code]
+#
+#     puts stderr "\n$color(red)$color(bold)$SELF ERROR$color(reset)"
+#     puts stderr "\tSorry, but there seems to be an error."
+#     puts stderr "\tWhile $context,"
+#     puts stderr "\t$message"
+#     if {$details != ""} {
+#         puts stderr "\t${color(yellow)}Specific error:$color(reset) $details"
+#     }
+#     puts stderr "\tat [exec date]"
+#
+#     if {$fatal} {
+#         puts stderr "\n${color(red)}Exiting with code $code$color(reset)"
+#         exit $code
+#     } else {
+#         puts stderr "\n${color(yellow)}Continuing despite error (code $code)...$color(reset)"
+#     }
+# }
+#
+# proc message_log {level message} {
+#     #
+#     # ARGS
+#     # level           in              log level (INFO, WARN, ERROR)
+#     # message         in              message text to log
+#     #
+#     # DESC
+#     # Logs timestamped messages to stdout with level indication and color coding
+#     #
+#     global color
+#     set timestamp [clock format [clock seconds] -format "%Y-%m-%d %H:%M:%S"]
+#
+#     switch -- $level {
+#         "INFO" {
+#             puts "$color(blue)\[$timestamp\] $level:$color(reset) $message"
+#         }
+#         "WARN" {
+#             puts "$color(yellow)\[$timestamp\] $level:$color(reset) $message"
+#         }
+#         "ERROR" {
+#             puts "$color(red)\[$timestamp\] $level:$color(reset) $message"
+#         }
+#         default {
+#             puts "\[$timestamp\] $level: $message"
+#         }
+#     }
+# }
+#
+# proc colors_setup {} {
+#     #
+#     # DESC
+#     # Initialize color support based on terminal capabilities
+#     #
+#     global color no_color
+#
+#     # ANSI color codes - always define them
+#     if {$no_color} {
+#         set color(red) ""
+#         set color(green) ""
+#         set color(yellow) ""
+#         set color(blue) ""
+#         set color(bold) ""
+#         set color(reset) ""
+#     } else {
+#         set color(red) "\033\[31m"
+#         set color(green) "\033\[32m"
+#         set color(yellow) "\033\[33m"
+#         set color(blue) "\033\[34m"
+#         set color(bold) "\033\[1m"
+#         set color(reset) "\033\[0m"
+#     }
+# }
+#
 
 proc user_prompt {question default {validate_proc ""}} {
     #
@@ -317,7 +321,7 @@ proc user_prompt {question default {validate_proc ""}} {
         if {$default != ""} {
             puts -nonewline "$question $color(green)\[$default\]$color(reset): "
         } else {
-            puts -nonewline "$color(bold)$question$color(reset): "
+            puts -nonewline "$color(bol ffd)$question$color(reset): "
         }
         flush stdout
 
@@ -331,95 +335,14 @@ proc user_prompt {question default {validate_proc ""}} {
 
         # Validate if validation proc provided
         if {$validate_proc != "" && $answer != ""} {
-            if {[catch {eval $validate_proc [list $answer]} valid] || !$valid} {
-                puts "${color(red)}✗ Invalid input. Please try again.$color(reset)"
+            if {[catch {$validate_proc [list $answer]} valid] || !$valid} {
+                puts [appUtils::colorize "red" "✗ Invalid input. Please try again."]
                 continue
             }
         }
 
         return $answer
     }
-}
-
-proc ip_validate {ip} {
-    #
-    # ARGS
-    # ip              in              IP address string to validate
-    # valid           return          1 if valid IP, 0 otherwise
-    #
-    # DESC
-    # Validates IP address format (simple dotted decimal check)
-    #
-    if {[catch {split $ip "."} parts]} {
-        return 0
-    }
-
-    if {[llength $parts] != 4} {
-        return 0
-    }
-
-    foreach part $parts {
-        if {![string is integer $part] || $part < 0 || $part > 255} {
-            return 0
-        }
-    }
-    return 1
-}
-
-proc port_validate {port} {
-    #
-    # ARGS
-    # port            in              port number to validate
-    # valid           return          1 if valid port, 0 otherwise
-    #
-    # DESC
-    # Validates port number (1-65535)
-    #
-    if {![string is integer $port] || $port < 1 || $port > 65535} {
-        return 0
-    }
-    return 1
-}
-
-proc email_validate {email} {
-    #
-    # ARGS
-    # email           in              email address to validate
-    # valid           return          1 if valid format, 0 otherwise
-    #
-    # DESC
-    # Basic email validation using regular expression
-    #
-    if {[catch {regexp {^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$} $email} match]} {
-        return 0
-    }
-    return $match
-}
-
-proc directory_validate {dir} {
-    #
-    # ARGS
-    # dir             in              directory path to validate
-    # valid           return          1 if valid/creatable, 0 otherwise
-    #
-    # DESC
-    # Validates directory exists or can be created
-    #
-    if {[file exists $dir]} {
-        if {![file isdirectory $dir]} {
-            return 0
-        }
-        if {![file writable $dir]} {
-            return 0
-        }
-        return 1
-    }
-
-    # Try to create directory
-    if {[catch {file mkdir $dir} error]} {
-        return 0
-    }
-    return 1
 }
 
 proc template_load {template_name class} {
@@ -535,7 +458,8 @@ proc targetHosts_gather {class} {
                     lappend clean_hosts $clean_host
 
                     # Get directories for this specific host
-                    set dirs [user_prompt "Directories to backup on $clean_host (comma-separated)" "/etc"]
+                    set dirs \
+                        [user_prompt "Directories to backup on $clean_host (comma-separated)" "/etc"]
                     foreach dir [split $dirs ","] {
                         set clean_dir [string trim $dir]
                         if {$clean_dir != ""} {
@@ -564,8 +488,13 @@ proc schedule_gather {class} {
     upvar $class config
     global color
 
-    puts "\n$color(blue)$color(bold)=== Configuring Backup Schedule ===$color(reset)"
-    puts "For each day, choose: ${color(green)}monthly${color(reset)}, ${color(yellow)}weekly${color(reset)}, ${color(blue)}daily${color(reset)}, or ${color(red)}none${color(reset)}"
+    set mesg [appUtils::colorize {bold blue} "=== Configuring Backup Schedule ==="]
+    puts "\n$mesg"
+    set monthly [appUtils::colorize green monthly]
+    set weekly [appUtils::colorize yellow weekly]
+    set daily [appUtils::colorize blue daily]
+    set none [appUtils::colorize red none]
+    puts "For each day, choose: $monthly, $weekly, $daily, $none"
 
     if {
         [catch {
