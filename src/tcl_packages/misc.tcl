@@ -242,6 +242,10 @@ namespace eval appUtils {
     }
 }
 
+proc printf {pattern args} {
+    puts -nonewline [format $pattern {*}$args]
+}
+
 proc ip_validate {ip} {
     #
     # ARGS

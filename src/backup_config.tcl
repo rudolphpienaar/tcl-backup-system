@@ -312,16 +312,18 @@ proc user_prompt {question default {validate_proc ""}} {
 
     if {$non_interactive} {
         if {$default == ""} {
-            config_error "invalidArgs" "Non-interactive mode requires default for: $question"
+            appUtils::errorLog "invalidArgs" "Non-interactive mode requires default for: $question"
         }
         return $default
     }
 
     while {1} {
+        set ask [appUtils::colorize {bold yellow} $question]
+        set def [appUtils::colorize {green} \[$default\]]
         if {$default != ""} {
-            puts -nonewline "$question $color(green)\[$default\]$color(reset): "
+            printf "$ask $def:"
         } else {
-            puts -nonewline "$color(bol ffd)$question$color(reset): "
+            printf "$ask:"
         }
         flush stdout
 
@@ -388,10 +390,10 @@ proc template_load {template_name class} {
             }
         } error]
     } {
-        config_error "templateLoad" "Template '$template_name': $error"
+        appUtils::errorLog "templateLoad" "Template '$template_name': $error"
     }
 
-    message_log "INFO" "Loaded template: $template_name"
+    appUtils::log "INFO" "Loaded template: $template_name"
 }
 
 proc basicInfo_gather {class} {
@@ -405,7 +407,8 @@ proc basicInfo_gather {class} {
     upvar $class config
     global config_name color
 
-    puts "\n$color(blue)$color(bold)=== Gathering Basic Configuration ===$color(reset)"
+    set header [appUtils::colorize {bold blue} "=== Gathering Basic Configuration ==="]
+    puts "\n$header"
 
     set config(name) $config_name
 
@@ -439,13 +442,14 @@ proc targetHosts_gather {class} {
     upvar $class config
     global color
 
-    puts "\n$color(blue)$color(bold)=== Configuring Target Hosts and Directories ===$color(reset)"
+    set header [appUtils::colorize {bold blue} "=== Configuring Target Hosts and Directories ==="]
+    puts "\n$header"
 
     if {
         [catch {
             set host_list [user_prompt "Target hosts (comma-separated)" "localhost"]
             if {$host_list == ""} {
-                config_error "invalidArgs" "At least one target host must be specified"
+                appUtils::errorLog "invalidArgs" "At least one target host must be specified"
             }
 
             set config(targetHosts) [split $host_list ","]
@@ -459,7 +463,8 @@ proc targetHosts_gather {class} {
 
                     # Get directories for this specific host
                     set dirs \
-                        [user_prompt "Directories to backup on $clean_host (comma-separated)" "/etc"]
+                        [user_prompt \
+                            "Directories to backup on $clean_host (comma-separated)" "/etc"]
                     foreach dir [split $dirs ","] {
                         set clean_dir [string trim $dir]
                         if {$clean_dir != ""} {
@@ -473,7 +478,7 @@ proc targetHosts_gather {class} {
             set config(partitions) [join $partitions ","]
         } error]
     } {
-        config_error "inputValidation" "Target hosts: $error"
+        appUtils::errorLog "inputValidation" "Target hosts: $error"
     }
 }
 
