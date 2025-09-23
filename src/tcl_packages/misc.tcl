@@ -223,20 +223,72 @@ namespace eval appUtils {
     proc _colors_setup {} {
         #
         # DESC
-        # Internal procedure to initialize the color array.
+        # Internal procedure to initialize the color array with a full
+        # set of standard and bright colors, plus text attributes.
         #
         variable _color
         variable _no_color
         if {$_no_color} {
-            array set _color {red "" green "" yellow "" blue "" bold "" reset ""}
-        } else {
+            # If color is disabled, all codes map to empty strings.
             array set _color {
-                red     "\033\[31m"
-                green   "\033\[32m"
-                yellow  "\033\[33m"
-                blue    "\033\[34m"
-                bold    "\033\[1m"
-                reset   "\033\[0m"
+                black "" red "" green "" yellow "" blue "" magenta "" cyan "" white ""
+                bright_black "" bright_red "" bright_green "" bright_yellow ""
+                bright_blue "" bright_magenta "" bright_cyan "" bright_white ""
+                bg_black "" bg_red "" bg_green "" bg_yellow "" bg_blue "" bg_magenta "" bg_cyan "" bg_white ""
+                bg_bright_black "" bg_bright_red "" bg_bright_green "" bg_bright_yellow ""
+                bg_bright_blue "" bg_bright_magenta "" bg_bright_cyan "" bg_bright_white ""
+                bold "" dim "" underline "" reverse "" reset ""
+            }
+        } else {
+            # If color is enabled, define the standard ANSI escape codes.
+            # The square brackets must be escaped.
+            array set _color {
+                # --- Standard Foreground Colors ---
+                black     "\033\[30m"
+                red       "\033\[31m"
+                green     "\033\[32m"
+                yellow    "\033\[33m"
+                blue      "\033\[34m"
+                magenta   "\033\[35m"
+                cyan      "\033\[36m"
+                white     "\033\[37m"
+
+                # --- Bright Foreground Colors ---
+                bright_black     "\033\[90m"
+                bright_red       "\033\[91m"
+                bright_green     "\033\[92m"
+                bright_yellow    "\033\[93m"
+                bright_blue      "\033\[94m"
+                bright_magenta   "\033\[95m"
+                bright_cyan      "\033\[96m"
+                bright_white     "\033\[97m"
+
+                # --- Standard Background Colors ---
+                bg_black    "\033\[40m"
+                bg_red      "\033\[41m"
+                bg_green    "\033\[42m"
+                bg_yellow   "\033\[43m"
+                bg_blue     "\033\[44m"
+                bg_magenta  "\033\[45m"
+                bg_cyan     "\033\[46m"
+                bg_white    "\033\[47m"
+
+                # --- Bright Background Colors ---
+                bg_bright_black    "\033\[100m"
+                bg_bright_red      "\033\[101m"
+                bg_bright_green    "\033\[102m"
+                bg_bright_yellow   "\033\[103m"
+                bg_bright_blue     "\033\[104m"
+                bg_bright_magenta  "\033\[105m"
+                bg_bright_cyan     "\033\[106m"
+                bg_bright_white    "\033\[107m"
+
+                # --- Attributes ---
+                bold      "\033\[1m"
+                dim       "\033\[2m"
+                underline "\033\[4m"
+                reverse   "\033\[7m" ;# Swaps foreground and background colors
+                reset     "\033\[0m"
             }
         }
     }
@@ -339,13 +391,13 @@ proc weekdays_list {} {
     return $weekdays
 }
 
-proc exit_with {text} {
+proc exit_with {text {code 0}} {
     #
     # DESC
     # Display usage information and exit
     #
     puts $text
-    exit 0
+    exit $code
 }
 
 proc deref {pointer {level 1}} {

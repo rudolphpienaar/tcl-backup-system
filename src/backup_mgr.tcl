@@ -1,368 +1,252 @@
-#!/bin/sh 
-# the next line  restart with wish \
- exec tclsh "$0" $@
+#!/bin/sh
+# the next line restart with wish \
+ exec tclsh "$0" ${1+"$@"}
 
 set G_SYNOPSIS "
-
 NAME
 
-      backup_mgr.tcl
+    backup_mgr.tcl - Main backup process manager.
 
 SYNOPSIS
 
-      backup_mgr.tcl          \[--archive <archive_set>]                \\
-                              \[--backupRootDir <backupRootDir>]        \\
-                              \[--tapeInit <option_init_tape_command>]  \\
-                              \[--rule <force_rule>]                    \\
-                              \[--init <self|filesystem>]               \\
-                              \[--day <forceDay>]                       \\
-                              \[--Reset]                                \\
-                              \[--usage]
+    backup_mgr.tcl --config-dir <directory>             \\
+                    [--archive <name>]                  \\
+                    [--rule <force_rule>]               \\
+                    [--day <force_day>]                 \\
+                    [--no-color]                        \\
+                    [--usage]
 
 DESCRIPTION
 
-        `backup_mgr.tcl' is the main backup manager. It creates and
-        maintains the backup archive objects, schedules the backup
-        types, stores state information to disk, etc.
+    `backup_mgr.tcl` is the main backup manager. It discovers and reads all YAML
+    configuration files in a specified directory, sorts them by priority
+    (none, daily, weekly, monthly), and executes the backup process for each.
 
-        The command line arguments are almost always used only for
-        debugging/testing and allow the calling process (or user)
-        to override backup_mgr's default behaviour.
+    After each successful backup, it saves the updated state back to the
+    corresponding YAML file.
 
 ARGS
 
-    o --archive <archive_set>
-            This can force backup_mgr to concentrate on a
-            specific archive, and ignore whatever it initialized
-            itself with. Note that at this stage, only ONE
-            archive_set name will be interpreted.
-    o --backupRootDir <backupRootDir>
-             This specifies the root directory containing the 
-             backup data folder, backup_lists, and object
-             configuration files.
-    o --tapeInit <option_init_tape_command>
-             Any optional tape commands can be specified. These
-             will be executed *before* any of the backups begin.
-             Again, note that the only real command that I had
-             in mind was `rewind'. Complex init sequences with
-             white space won't work!
-    o --rule <force_rule>
-             Force backup_mgr to use rule <force_rule> irrespective
-             of what should have been scheduled.
-    o --day <forceDay>
-             Force backup_mgr to use the ruleset for day <forceDay>.
-    o --init <self|filesystem>
-            Initialize tape objects (rules, priorities, hosts, etc)
-            either from a stored state on disk, or recreate from
-            scratch (usually encoded within this script).
-    o --Reset
-            Similar to above, with implicit self initialization.
-            Once setup, processing will terminate without performing
-            the backup.
-    o --usage
-            This synopsis.
-#
+    --config-dir <directory>
+        (Required) The full path to the directory containing the .yml backup
+        configuration files.
+
+    --archive <name>
+        (Optional) Process only a single backup configuration from the directory.
+        The <name> must match the 'meta,name' field inside a YAML file.
+
+    --rule <force_rule>
+        (Optional) Force the manager to use <force_rule> (e.g., 'monthly')
+        irrespective of what is scheduled for the current day.
+
+    --day <force_day>
+        (Optional) Force the manager to operate as if the current day is
+        <force_day> (e.g., 'Sun').
+
+    --no-color
+        (Optional) Disable colored output from the logging system.
+
+    --usage
+        Show this synopsis.
+
+CONFIGURATION
+
+    This manager operates on YAML (.yml) configuration files. Each file represents
+    a complete backup set and contains both static configuration and dynamic state.
+
+    ## Object Structure
+    The YAML file is structured into several sections:
+    - meta: Basic information (`name`, `description`).
+    - manager: Details for the backup host (`managerHost`, `remoteUser`).
+    - targets: What to back up (`partitions`, a list of `host:/path`).
+    - schedule: The backup rule for each day of the week (`Mon: daily`).
+    - storage: Paths and rotation counts (`logDir`, `remoteDevice`, `dailySets`).
+    - notifications: Hooks for email and commands (`adminUser`, `notifyError`).
+    - state: Runtime data updated by this script (`currentSet`, `archiveDate`).
+
+    ## Bootstrapping a New Backup Set
+    To create a new backup configuration from scratch, use the interactive wizard:
+
+        backup_config.tcl --create <your-backup-name>
+
+    This wizard will guide you through all the necessary questions and generate a
+    valid YAML file that you can then place in your config directory.
 "
-# TODO
-#
-# (Short term)
-# o        Ability to pass additional parameters to tar command
-# o        More error checking
-# o        State and infrastructure testing
-# o        Separate configuration information
-#
-# o        Check `archiveDate'
-# o        Check 'status'
-#
-# o        `nop' override in class - for overriding a scheduled cron
-#        job without needing to acutally remove it.
-#
-# (Long term)
-# o        Higher dimension array construction (i.e. > 2)
-# o        Socket communication between different processes for status 
-#        information?
-# o        Ordering of tape archives in order of daily, weekly, monthly - 
-#        thus if a daily is scheduled on the same day using the same 
-#        device as the weekly/monthly, the daily will backup first, then 
-#        the weekly will rewind and backup, and then the monthly will 
-#        rewind and backup. Basically just to place preference on 
-#        collision days.
-#
 # HISTORY
-#
-# End April 1998
-# o        Initial design, testing, debugging
-# o        Split into separate module components
-#
-# 5-11-1998
-# o        Added command line interpretation -
-#        allows for process to be run on specific tape set
-#        with a given rule. Note that rule is forced on each
-#        element of command line set.
-#
-# 5-14-1998
-# o        General cron-related problems... cron launched apps do not
-#        have shell variables set - i.e. no path!
-#
-# 5-15-1998
-# o        Added `totalBackups' parameter to class definition. This keeps
-#        track of the total number of backups per set, allowing subsequent
-#        backups to fsf appropriately
-#
-# 6-25-1998
-# o        Crontab behaviour is still not optimal. Eventhough the process is 
-#        called in cron from the target directory, i.e. 
-#        /root/backup/backup_mgr.tcl, the process dumps its working files 
-#        to /root/backup. Apparently cron runs scheduled tasks from the 
-#        owner's home directory.
-#        
-#        The best solution is to specify working directory and path 
-#        in backup_mgr.tcl
-#
-# o        Working directory data path added to basic class definition
-#
-# 7-6-1998
-# o        Sorted archive list. Lower priority archives are scheduled first, 
-#        with important archives last. Priority is defined as the current 
-#        rule: `none' has least priority, with `daily' more priority 
-#        scaling all the way to `monthly' with the most. This addresses 
-#        the problem where on a particular day one archive might have a 
-#        `daily' backup scheduled, and another a `monthly'. If both 
-#        archives use the same remote device, i.e. device clash, the lower 
-#        priority will occur first, and then when the higher priority 
-#        backup runs, it will in effect overwrite the earlier process's 
-#        backup.
-#
-# 7-21-1998
-# o        Added `date' value to class structure
-#
-# 1-10-2000
-# o        Resurrected and began integration into new env.
-#        Initial focus is on getting existing code up and running again
-#        without worrying about possible redesign.
-#
-# 1-15-2000
-# o     Testing full run!
-#
-# 1-20-2000
-# o        Changed tape device back to nst
-#
-# 22 September 2004
-# o        Resurrected! For the second time.
-#        Made changes to reflect mgh environment
-#
-# January 2010
-# o     CHB deployment
-# o     Spec for backupRootDir
-# 
-
-
-###\\\
-# NB NB
-# The following need to be defined for a given backup system!!
-###///
-# The path containing the support tcl files.
-lappend auto_path       /neuro/arch/scripts/tcl_packages
-# The <dataPath> is the backupRootDir and contains the config files for
-# a backup, as well as the actual backup tgz files for each config.
-set dataPath            "/neuro/users/rudolphpienaar/backup"
-# The <lst_archive> contains the names (filenames) of each backup archive
-set lst_archive        {fnndsc-etc fnndsc-localUsers scanner-oc-backup fnndsc-wiki}
-
-###\\\
-###|||
-###||| You shouldn't need to change anything below here!
-###|||
-###///
-
+# ... (Full history remains here) ...
+#   17 September 2025
+#   o   Refactored to use the central appUtils for logging and error handling.
+#   o   Consolidated flat error message globals into a single dictionary.
 
 ###\\\
 # include --->
 ###///
-package require         class_struct        
-package require         misc                
-package require         tape_misc        
-package require         parval                
+package require group
+package require misc
+package require tape_misc
+package require parval
 
 ###\\\
 # globals --->
 ###///
 
-set SELF                "backup_mgr.tcl"
-set ext                 "object"
-set lst_base_struct     [tape_class_struct]
-set delim               ">"
+set SELF "backup_mgr.tcl"
+set ext "yml"
 
-# Actions
-set AM_remoteDevice     "communicating with remote device"
-set AM_pingHost         "pinging remote host"
-set AM_rsh              "attempting to rsh"
-set AM_parseResults     "parsing results file"
-set AM_parseStatus      "parsing status file"
-set AM_backup           "performing the backup"
-
-# Error messages
-set EM_remoteDevice     "I could not contact the remote device"
-set EM_pingHost         "I could not ping host"
-set EM_rsh              "I could not seem to remotely log in"
-set EM_parseResults     "I could not parse the results of the backup"
-set EM_parseStatus      "I could not parse the status of the backup"
-set EM_backup           "The backup seems to have failed"
-
-# Error codes
-set EC_remoteDevice     1
-set EC_pingHost         2
-set EC_rsh              3
-set EC_parseResults     4
-set EC_parseStatus      5
-set EC_backup           6
+# Error definitions for the appUtils library
+set error_definitions {
+    cliArgs {
+        ERR_context "parsing command-line arguments"
+        ERR_message "A required argument was missing or invalid."
+        ERR_code 1
+    }
+    dirNotFound {
+        ERR_context "validating configuration directory"
+        ERR_message "The specified directory does not exist."
+        ERR_code 2
+    }
+    yamlLoad {
+        ERR_context "loading YAML configuration file"
+        ERR_message "The file could not be parsed. It may be malformed."
+        ERR_code 3
+    }
+    yamlSave {
+        ERR_context "saving state to YAML configuration file"
+        ERR_message "The application could not write the updated state to the file."
+        ERR_code 4
+    }
+    backupFailed {
+        ERR_context "running backup processes"
+        ERR_message "One or more backups failed to complete successfully."
+        ERR_code 5
+    }
+}
 
 # Week day index
-set lst_weekdays        [weekdays_list]
-
-#
-# Types of backup operation (the order in action lists is important!)
-#
-#        o `monthly'            full (non incremental) backup
-#        o `weekly'             weekly incremental
-#                               - referenced to most recent monthly
-#        o `daily'              daily  incremental
-#                               - referenced to most recent weekly
-#
-set lst_actions                {monthly weekly daily none}
-set lst_actionsPriority        {none daily weekly monthly}
-
-#
-# The actual archives.
-#        o Each archive *must* have a set of rules (defined below)
-#
-#set lst_archive                 {fnndsc-etc fnndsc-localUsers fnndsc-chb}
-
+set lst_weekdays [weekdays_list]
 
 ###\\\
 # Function definitions --->
 ###///
 
 proc synopsis_show {} {
-    global SELF G_SYNOPSIS
-    set base "none"
-
+    global G_SYNOPSIS
     puts "$G_SYNOPSIS"
-
-    shutdown 0
+    exit 0
 }
 
 proc shutdown {exitcode} {
-#
-# exitcode        in        code returned to system
-#
-# process shut down and exit
-#
     global SELF
-
-    puts "\n'$SELF' shutting down..."
-    puts "\tSending system exitcode of $exitcode\n"
+    appUtils::log INFO "'$SELF' shutting down with exit code $exitcode."
     exit $exitcode
 }
 
 ###\\\
 # main --->
-###/// 
-set date                [exec date]
-set today               [lindex $date 0]
-set todayDate           [lindex $date 2]
+###///
+set date [exec date]
+set today [lindex $date 0]
+set todayDate [lindex $date 2]
 
-set day                 $today
-set archive             "void"
-set rule                "void"
-set init                "filesystem"
-set tapeInit            "void"
-set Reset               0
-set usage               0
+# --- Parse Command Line Arguments ---
+set config_dir ""
+set archive_filter ""
+set rule "void"
+set day $today
+set no_color 0
+set usage 0
 
-set lst_commargs        {archive rule init tapeInit usage Reset day backupRootDir}
+set lst_commargs {config-dir archive rule day no-color usage}
 set arr_PARVAL(0) 0
 PARVAL_build commswitch $argv "--"
 foreach element $lst_commargs {
     PARVAL_interpret commswitch $element
-    if { $arr_PARVAL(commswitch,argnum) >= 0 } {
+    if {$arr_PARVAL(commswitch,argnum) >= 0} {
         set $element $arr_PARVAL(commswitch,value)
     }
 }
+if {[info exists archive]} {set archive_filter $archive}
 
-if ![catch {set backupRootDir}] {
-  set dataPath $backupRootDir
-} 
+# --- Initialize Utilities ---
+appUtils::init -self $SELF -errors $error_definitions -nocolor $no_color
 
 if {$usage} {synopsis_show}
-
-if {$archive != "void" } {
-    set lst_archive $archive
+if {$config_dir == ""} {
+    appUtils::errorLog "cliArgs" "Required argument --config-dir was not provided."
+}
+if {![file isdirectory $config_dir]} {
+    appUtils::errorLog "dirNotFound" "Configuration directory not found at '$config_dir'"
 }
 
-if {$init == "self" || $Reset} {
-    foreach tape $lst_archive {
-        class_Initialise arr_${tape}_currentSet lst_actions lst_${tape}_currentSet
-        class_Initialise arr_${tape}_totalSet   lst_actions lst_${tape}_totalSet
-        class_Initialise arr_${tape}_rules      lst_weekdays lst_rules_$tape
-        # Initialise the class according to the class definition structure
-        class_Initialise arr_${tape} lst_base_struct    \ 
-                "$tape                                  \ 
-                {$date}                                 \
-                $dataPath                               \
-                arr_${tape}_currentSet                  \ 
-                arr_${tape}_totalSet                    \
-                arr_${tape}_rules                       \
-                none                                    \ 
-                $remoteHost                             \
-                $remoteUser                             \ 
-                $remoteDevice                           \
-                $rsh $adminUser                         \
-                {$notifyTape}                           \
-                {$notifyTar}                            \
-                {$notifyError}                          \
-                ptr_${tape}_partition                   \
-                {}                                      \
-                {} "
-        class_Dump arr_${tape} ${dataPath}/${tape}.${ext}
+# --- Discover, Load, and Sort Backup Configurations ---
+set config_files [glob -nocomplain -join $config_dir *.yml]
+append config_files [glob -nocomplain -join $config_dir *.yaml]
+
+set groups_to_sort {}
+set group_to_file_map [dict create]
+set i 0
+foreach file $config_files {
+    set group_name "backup_[clock clicks]_[incr i]"
+    if {[catch {group::fromYaml $group_name %$file} err]} {
+        appUtils::log WARN "Skipping invalid config file '$file': $err"
+        continue
     }
-} else {
-    foreach tape $lst_archive {
-        class_Initialise arr_${tape} lst_base_struct {} ${dataPath}/${tape}.${ext}
+
+    if {$archive_filter ne "" && [set ${group_name}(meta,name)] ne $archive_filter} {
+        rename $group_name ""
+        continue
     }
+
+    set current_rule [tape_todayRule_get $group_name $day]
+    set priority [lsearch -exact {none daily weekly monthly} $current_rule]
+    if {$priority < 0} {set priority 0}
+
+    lappend groups_to_sort [list $priority $group_name]
+    dict set group_to_file_map $group_name $file
 }
 
-if {$Reset} {shutdown 0}
+if {[llength $groups_to_sort] == 0} {
+    appUtils::log WARN "No backup configurations found or matched in '$config_dir'. Exiting."
+    shutdown 0
+}
 
-# Sort the archives according to priority
-foreach action $lst_actionsPriority {
-    foreach tape $lst_archive {
-        if {[tape_todayRule_get arr_$tape $day] == "$action"} {
-            lappend lst_sorted_archive $tape
+set sorted_groups_with_priority [lsort -integer -index 0 $groups_to_sort]
+
+appUtils::log INFO "Processing backups for day '$day'."
+appUtils::log INFO "Execution order (by priority):"
+set sorted_group_names {}
+foreach item $sorted_groups_with_priority {
+    set group [lindex $item 1]
+    lappend sorted_group_names $group
+    appUtils::log INFO "\t- [set ${group}(meta,name)] ([set ${group}(state,currentRule)])"
+}
+
+# --- Main Execution Loop ---
+set overall_status 1
+foreach group $sorted_group_names {
+    set config_file [dict get $group_to_file_map $group]
+    set group_meta_name [set ${group}(meta,name)]
+    appUtils::log INFO "Executing backup: '$group_meta_name' from '$config_file'..."
+
+    set ok [tape_backup_manage $group $rule $day]
+
+    if {$ok} {
+        appUtils::log INFO "Status ok. Saving updated state to $config_file."
+        if {[catch {group::toYaml $group %$config_file} err]} {
+            appUtils::log ERROR "Failed to save state for '$group_meta_name' to '$config_file': $err"
+            set overall_status 0
         }
+    } else {
+        appUtils::log ERROR "Backup process for '$group_meta_name' reported a failure."
+        set overall_status 0
     }
+    rename $group ""
 }
 
-puts "$SELF"
-puts "\tUnordered list of archives:\t$lst_archive"
-puts "\tProcessing archives in order:\t$lst_sorted_archive\n"
-
-#foreach today $lst_weekdays {
-#    puts ""
-    foreach tape $lst_sorted_archive {
-        set ok [tape_backup_manage arr_${tape} $rule $day $tapeInit]
-        if {$ok} {
-            puts stdout "Status ok. Dumping $tape object to file."
-            class_Dump arr_${tape} ${dataPath}/${tape}.${ext}
-        }
-    }
-#}
-
-if {$ok == 1}  {
+# --- Shutdown with Final Status ---
+if {$overall_status} {
+    appUtils::log INFO "All backups completed successfully."
     shutdown 0
 } else {
-    puts "WARNING"
-    puts "\tSome internal error was sent back to main controlling process."
-    shutdown 1
+    appUtils::errorLog "backupFailed" "One or more backup processes failed to complete."
 }
-

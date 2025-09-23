@@ -25,7 +25,7 @@ DESCRIPTION
 
       Interactive wizard for creating backup configuration files. Guides you
       through setting up backup schedules, target hosts, storage locations,
-      and notification preferences. Generates .object configuration files
+      and notification preferences. Generates .object configuration file
       compatible with the backup_mgr.tcl system.
 
 ARGS
@@ -71,9 +71,10 @@ ARGS
 
 # Package requirements
 lappend auto_path [file dirname [info script]]
-package require class_struct
+# package require class_struct
 package require misc
 package require parval
+package require group
 
 # Global variables
 set ::SELF [file tail [info script]]
@@ -97,29 +98,9 @@ set lst_members_flags_defaults {
     show_help       help            0
 }
 
-# set config_name ""
-# set template_type ""
-# set output_dir "/root/backup_data"
-# set daily_sets ""
-# set weekly_sets ""
-# set monthly_sets ""
-# set non_interactive 0
-# set validate_only 0
-# set no_color 0
-# set show_help 0
-#
-# # Default tape counts
-# set DEFAULT_DAILY_SETS 7
-# set DEFAULT_WEEKLY_SETS 4
-# set DEFAULT_MONTHLY_SETS 3
-#
-# # CLI parameter list for parval
-# set lst_commargs \
-#     {create template output-dir daily-sets weekly-sets
-#      monthly-sets non-interactive validate-only no-color help}
 
 # Error definitions using dictionary with greppable field names
-set errors {
+set error_definitions {
     invalidArgs {
         ERR_context "parsing command line arguments"
         ERR_message "Invalid or missing command line arguments"
@@ -155,10 +136,15 @@ set errors {
         ERR_message "User chose to abort the configuration process"
         ERR_code 7
     }
-    classInit {
-        ERR_context "initializing configuration class"
-        ERR_message "Could not initialize backup configuration class structure"
+    groupInit {
+        ERR_context "initializing configuration group"
+        ERR_message "Could not initialize backup configuration group structure"
         ERR_code 8
+    }
+    objSave {
+        ERR_context "saving object structure"
+        ERR_message "Some error was thrown while saving"
+        ERR_code 9
     }
 }
 
@@ -168,134 +154,7 @@ appUtils::init -self $SELF -errors $error_definitions -nocolor "0"
 # Function definitions
 ###///
 
-# proc errors_validate {} {
-#     #
-#     # DESC
-#     # Validates that all error definitions in the errors dictionary contain
-#     # required fields: ERR_context, ERR_message, and ERR_code
-#     #
-#     global errors
-#
-#     if {
-#         [catch {
-#             dict for {type info} $errors {
-#                 if {
-#                     ![dict exists $info ERR_context] ||
-#                     ![dict exists $info ERR_message] ||
-#                     ![dict exists $info ERR_code]
-#                 } {
-#                     error "Incomplete error definition for type: $type"
-#                 }
-#
-#                 # Validate error code is integer
-#                 set code [dict get $info ERR_code]
-#                 if {![string is integer $code] || $code < 1} {
-#                     error "Invalid error code for type $type: $code (must be positive integer)"
-#                 }
-#             }
-#         } error]
-#     } {
-#         puts stderr "ERROR: Error dictionary validation failed: $error"
-#         exit 99
-#     }
-# }
-#
-# proc config_error {error_type details {fatal 1}} {
-#     #
-#     # ARGS
-#     # error_type      in              type of error from errors dictionary
-#     # details         in              specific error details from system
-#     # fatal           in (opt)        1 to exit, 0 to continue (default: 1)
-#     #
-#     # DESC
-#     # Handles configuration errors using dictionary-based error definitions.
-#     # Provides rich error context and exits with appropriate code if fatal.
-#     #
-#     global SELF errors color
-#
-#     if {![dict exists $errors $error_type]} {
-#         puts stderr "${color(red)}INTERNAL ERROR: Unknown error type '$error_type'$color(reset)"
-#         puts stderr "Valid error types: [dict keys $errors]"
-#         exit 99
-#     }
-#
-#     set error_info [dict get $errors $error_type]
-#     set context [dict get $error_info ERR_context]
-#     set message [dict get $error_info ERR_message]
-#     set code [dict get $error_info ERR_code]
-#
-#     puts stderr "\n$color(red)$color(bold)$SELF ERROR$color(reset)"
-#     puts stderr "\tSorry, but there seems to be an error."
-#     puts stderr "\tWhile $context,"
-#     puts stderr "\t$message"
-#     if {$details != ""} {
-#         puts stderr "\t${color(yellow)}Specific error:$color(reset) $details"
-#     }
-#     puts stderr "\tat [exec date]"
-#
-#     if {$fatal} {
-#         puts stderr "\n${color(red)}Exiting with code $code$color(reset)"
-#         exit $code
-#     } else {
-#         puts stderr "\n${color(yellow)}Continuing despite error (code $code)...$color(reset)"
-#     }
-# }
-#
-# proc message_log {level message} {
-#     #
-#     # ARGS
-#     # level           in              log level (INFO, WARN, ERROR)
-#     # message         in              message text to log
-#     #
-#     # DESC
-#     # Logs timestamped messages to stdout with level indication and color coding
-#     #
-#     global color
-#     set timestamp [clock format [clock seconds] -format "%Y-%m-%d %H:%M:%S"]
-#
-#     switch -- $level {
-#         "INFO" {
-#             puts "$color(blue)\[$timestamp\] $level:$color(reset) $message"
-#         }
-#         "WARN" {
-#             puts "$color(yellow)\[$timestamp\] $level:$color(reset) $message"
-#         }
-#         "ERROR" {
-#             puts "$color(red)\[$timestamp\] $level:$color(reset) $message"
-#         }
-#         default {
-#             puts "\[$timestamp\] $level: $message"
-#         }
-#     }
-# }
-#
-# proc colors_setup {} {
-#     #
-#     # DESC
-#     # Initialize color support based on terminal capabilities
-#     #
-#     global color no_color
-#
-#     # ANSI color codes - always define them
-#     if {$no_color} {
-#         set color(red) ""
-#         set color(green) ""
-#         set color(yellow) ""
-#         set color(blue) ""
-#         set color(bold) ""
-#         set color(reset) ""
-#     } else {
-#         set color(red) "\033\[31m"
-#         set color(green) "\033\[32m"
-#         set color(yellow) "\033\[33m"
-#         set color(blue) "\033\[34m"
-#         set color(bold) "\033\[1m"
-#         set color(reset) "\033\[0m"
-#     }
-# }
-#
-
-proc user_prompt {question default {validate_proc ""}} {
+proc user_prompt {cliGroup question default {validate_proc ""}} {
     #
     # ARGS
     # question        in              question to ask user
@@ -308,9 +167,9 @@ proc user_prompt {question default {validate_proc ""}} {
     # In non-interactive mode, returns default value without prompting.
     # Repeats prompt until valid input received.
     #
-    global non_interactive color
+    upvar #0 $cliGroup cli
 
-    if {$non_interactive} {
+    if {$cli(non-interactive)} {
         if {$default == ""} {
             appUtils::errorLog "invalidArgs" "Non-interactive mode requires default for: $question"
         }
@@ -321,9 +180,9 @@ proc user_prompt {question default {validate_proc ""}} {
         set ask [appUtils::colorize {bold yellow} $question]
         set def [appUtils::colorize {green} \[$default\]]
         if {$default != ""} {
-            printf "$ask $def:"
+            printf "$ask $def: "
         } else {
-            printf "$ask:"
+            printf "$ask: "
         }
         flush stdout
 
@@ -347,621 +206,611 @@ proc user_prompt {question default {validate_proc ""}} {
     }
 }
 
-proc template_load {template_name class} {
+proc metaInfo_gather {cli_group} {
     #
     # ARGS
-    # template_name   in              name of template to load
-    # class           in/out          configuration class to populate
+    # cli_group     in      The name of the global CLI group, used for context.
     #
     # DESC
-    # Loads predefined configuration templates into class using your
-    # established class manipulation functions
+    # Interactively gathers the metadata for the backup (its name and a
+    # description). It bundles this data into a new, temporary group object
+    # and returns the name of that temporary group. This procedure is "stateless."
     #
-    upvar $class config
+    # RETURN
+    # Returns the unique global name of the temporary group as a string.
+    #
+    upvar #0 $cli_group cli
 
-    if {
-        [catch {
-            switch -- $template_name {
-                "server" {
-                    set config(scheduleType) "full"
-                    set config(directories) "/etc,/var/log,/root"
-                    set config(description) "Server system configuration backup"
-                }
-                "desktop" {
-                    set config(scheduleType) "daily_weekly"
-                    set config(directories) "/home,/opt"
-                    set config(description) "Desktop user data backup"
-                }
-                "database" {
-                    set config(scheduleType) "full"
-                    set config(directories) "/var/lib/mysql,/var/lib/postgresql"
-                    set config(description) "Database backup with monthly full backups"
-                }
-                "minimal" {
-                    set config(scheduleType) "weekly_only"
-                    set config(directories) "/etc"
-                    set config(description) "Minimal system backup"
-                }
-                default {
-                    set config(scheduleType) "daily_weekly"
-                    set config(directories) "/etc"
-                    set config(description) "Custom backup configuration"
-                }
-            }
-        } error]
-    } {
-        appUtils::errorLog "templateLoad" "Template '$template_name': $error"
-    }
+    puts [appUtils::colorize {bold blue} "\n=== Configuring Basic Information ==="]
 
-    appUtils::log "INFO" "Loaded template: $template_name"
+    # --- Step 1: Gather all data into a local key-value list ---
+    # Use the value from the '--create' flag as the default name.
+    set name [user_prompt $cli_group "Backup name (a single word for the config file)" $cli(create)]
+    set description [user_prompt $cli_group "Backup description" "Custom backup configuration"]
+
+    set kv_list [list \
+        name $name \
+        description $description]
+
+    # --- Step 2: Create the temporary global group ---
+    set temp_group_name "_temp_meta_[clock clicks]"
+    group::create $temp_group_name $kv_list
+
+    # --- Step 3: Return the name of the temporary group ---
+    return $temp_group_name
 }
 
-proc basicInfo_gather {class} {
+proc managerInfo_gather {cli_group} {
     #
     # ARGS
-    # class           in/out          configuration class to populate
+    # cli_group     in      The name of the global CLI group, used for context.
     #
     # DESC
-    # Collects basic backup configuration information using your class structure
+    # Interactively collects the basic backup configuration information. It
+    # bundles this data into a new, temporary group object and returns the
+    # unique name of that temporary group for the caller to process.
+    # This procedure is "stateless" and does not modify any external groups.
     #
-    upvar $class config
-    global config_name color
+    # RETURN
+    # Returns the unique global name of the temporary group as a string.
+    #
+    upvar #0 $cli_group cli
 
-    set header [appUtils::colorize {bold blue} "=== Gathering Basic Configuration ==="]
-    puts "\n$header"
+    puts [appUtils::colorize {bold blue} "\n=== Archive Manager Configuration ==="]
 
-    set config(name) $config_name
+    # --- Step 1: Gather all data into a local key-value list ---
+    set kv_list [list]
+    # lappend kv_list name $cli(create)
 
-    if {
-        [catch {
-            set config(description) [user_prompt "Backup description" $config(description)]
-        } error]
-    } {
-        config_error "inputValidation" "Backup description: $error"
-    }
+    # set description [user_prompt $cli_group "Backup description" "Backup Archive"]
+    # lappend kv_list description $description
 
-    if {
-        [catch {
-            set config(managerHost) [user_prompt "Manager host IP" "127.0.0.1" ip_validate]
-            set config(managerPort) [user_prompt "Manager SSH port" "22" port_validate]
-            set config(managerUser) [user_prompt "Manager SSH user" "root"]
-        } error]
-    } {
-        config_error "inputValidation" "Manager information: $error"
-    }
+    set managerHost [user_prompt $cli_group "Manager host IP" "127.0.0.1" ip_validate]
+    lappend kv_list managerHost $managerHost
+
+    set managerPort [user_prompt $cli_group "Manager SSH port" "22" port_validate]
+    lappend kv_list managerPort $managerPort
+
+    set managerUser [user_prompt $cli_group "Manager SSH user" "root"]
+    lappend kv_list managerUser $managerUser
+
+    # --- Step 2: Create the temporary global group ---
+    set temp_group_name "_temp_basic_info_[clock clicks]"
+    group::create $temp_group_name $kv_list
+
+    # --- Step 3: Return the name of the temporary group ---
+    return $temp_group_name
 }
 
-proc targetHosts_gather {class} {
+proc workerInfo_gather {cli_group archive_group} {
     #
     # ARGS
-    # class           in/out          configuration class to populate
+    # cli_group         in      The name of the global CLI group.
+    # archive_group     in      The name of the main configuration group being built.
     #
     # DESC
-    # Collects target host information and their backup directories
+    # Gathers all worker-related configuration using the refined structure.
+    # It creates a 'default' block and sibling blocks for any per-host overrides.
     #
-    upvar $class config
-    global color
+    # RETURN
+    # Returns the unique global name of the temporary group as a string.
+    #
+    upvar #0 $archive_group archive
 
-    set header [appUtils::colorize {bold blue} "=== Configuring Target Hosts and Directories ==="]
-    puts "\n$header"
+    puts [appUtils::colorize {bold blue} "\n=== Configuring Worker Paths ==="]
+    puts "These are the paths on the client machines."
 
-    if {
-        [catch {
-            set host_list [user_prompt "Target hosts (comma-separated)" "localhost"]
-            if {$host_list == ""} {
-                appUtils::errorLog "invalidArgs" "At least one target host must be specified"
+    # --- Step 1: Gather the global defaults ---
+    set default_scriptDir [user_prompt $cli_group \
+        "Default worker script directory" "/usr/local/bin"]
+    set default_tclLibPath [user_prompt $cli_group \
+        "Default Tcl library path (TCLLIBPATH)" "/usr/local/lib/tcl"]
+
+    # --- Step 2: Build the key-value list, starting with the default block ---
+    set kv_list [list]
+    lappend kv_list "default,scriptDir" $default_scriptDir
+    lappend kv_list "default,tclLibPath" $default_tclLibPath
+
+    # --- Step 3: Find unique hosts and gather overrides ---
+    if {[info exists archive(targets,partitions)]} {
+        set unique_hosts [dict create]
+        foreach partition [split $archive(targets,partitions) ","] {
+            set host [lindex [split $partition ":"] 0]
+            dict set unique_hosts [string trim $host] 1
+        }
+
+        if {[dict size $unique_hosts] > 0} {
+            puts "\n--- Per-Host Overrides ---"
+            puts "You can now provide specific paths for any host that differs from the default."
+        }
+
+        dict for {host _} $unique_hosts {
+            set provide_overrides [user_prompt $cli_group \
+                "Provide specific worker paths for '$host'? (y/n)" "n"]
+
+            if {[string tolower [string index $provide_overrides 0]] eq "y"} {
+                puts "--- Override paths for '$host' ---"
+                set scriptDir [user_prompt $cli_group \
+                    "Worker script directory for '$host'" $default_scriptDir]
+                set tclLibPath [user_prompt $cli_group \
+                    "Tcl library path for '$host'" $default_tclLibPath]
+
+                # Append the host-specific block to the key-value list
+                lappend kv_list "${host},scriptDir" $scriptDir
+                lappend kv_list "${host},tclLibPath" $tclLibPath
             }
-
-            set config(targetHosts) [split $host_list ","]
-            set clean_hosts {}
-            set partitions {}
-
-            foreach host $config(targetHosts) {
-                set clean_host [string trim $host]
-                if {$clean_host != ""} {
-                    lappend clean_hosts $clean_host
-
-                    # Get directories for this specific host
-                    set dirs \
-                        [user_prompt \
-                            "Directories to backup on $clean_host (comma-separated)" "/etc"]
-                    foreach dir [split $dirs ","] {
-                        set clean_dir [string trim $dir]
-                        if {$clean_dir != ""} {
-                            lappend partitions "$clean_host:$clean_dir"
-                        }
-                    }
-                }
-            }
-
-            set config(targetHosts) $clean_hosts
-            set config(partitions) [join $partitions ","]
-        } error]
-    } {
-        appUtils::errorLog "inputValidation" "Target hosts: $error"
+        }
     }
+
+    # --- Step 4: Create the final temporary group in one single call ---
+    set temp_group_name "_temp_worker_[clock clicks]"
+    group::create $temp_group_name $kv_list
+
+    return $temp_group_name
 }
 
-proc schedule_gather {class} {
+proc targetHosts_gather {cli_group} {
     #
     # ARGS
-    # class           in/out          configuration class to populate
+    # cli_group     in      The name of the global CLI group, used for context.
     #
     # DESC
-    # Configures backup schedule day by day
+    # Collects target host information and their backup directories. It
+    # bundles this data into a new, temporary group object and returns
+    # the name of that temporary group.
     #
-    upvar $class config
-    global color
+    # RETURN
+    # Returns the unique global name of the temporary group as a string.
+    #
+    puts [appUtils::colorize {bold blue} "\n=== Configuring Target Hosts and Directories ==="]
 
-    set mesg [appUtils::colorize {bold blue} "=== Configuring Backup Schedule ==="]
-    puts "\n$mesg"
+    set host_list [user_prompt $cli_group "Target hosts (comma-separated)" "localhost"]
+    if {$host_list == ""} {
+        appUtils::errorLog "invalidArgs" "At least one target host must be specified"
+        return "" ;# Return empty on error
+    }
+
+    set partitions {}
+    foreach host [split $host_list ","] {
+        set clean_host [string trim $host]
+        if {$clean_host == ""} {continue}
+
+        set dirs [user_prompt $cli_group \
+            "Directories to backup on '$clean_host' (comma-separated)" "/etc"]
+
+        foreach dir [split $dirs ","] {
+            set clean_dir [string trim $dir]
+            if {$clean_dir != ""} {
+                lappend partitions "$clean_host:$clean_dir"
+            }
+        }
+    }
+
+    # Create the temporary global group.
+    set temp_group_name "_temp_targets_[clock clicks]"
+    group::create $temp_group_name [list partitions [join $partitions ","]]
+
+    return $temp_group_name
+}
+
+proc schedule_gather {cli_group} {
+    #
+    # ARGS
+    # cli_group     in      The name of the global CLI group, used for context.
+    #
+    # DESC
+    # Interactively gathers the daily backup schedule from the user. It
+    # bundles this data into a new, temporary group object and returns the
+    # unique name of that temporary group for the caller to process.
+    # This procedure is "stateless" and does not modify any external groups.
+    #
+    # RETURN
+    # Returns the unique global name of the temporary group as a string.
+    #
+    upvar #0 $cli_group cli
+
+    puts [appUtils::colorize {bold blue} "\n=== Configuring Backup Schedule ==="]
     set monthly [appUtils::colorize green monthly]
     set weekly [appUtils::colorize yellow weekly]
     set daily [appUtils::colorize blue daily]
     set none [appUtils::colorize red none]
     puts "For each day, choose: $monthly, $weekly, $daily, $none"
 
-    if {
-        [catch {
-            set days {Mon Tue Wed Thu Fri Sat Sun}
-            array set rules {}
+    # Use a simple local array to gather the data.
+    array set rules {}
+    set days {Mon Tue Wed Thu Fri Sat Sun}
 
-            foreach day $days {
-                while {1} {
-                    set rule [user_prompt "$day backup type" "daily"]
-                    if {[lsearch {monthly weekly daily none} $rule] != -1} {
-                        set rules($day) $rule
-                        break
-                    } else {
-                        puts "${color(red)}Invalid choice. Use: monthly, weekly, daily, or none$color(reset)"
-                    }
-                }
+    # This is the data-gathering loop for each day of the week.
+    foreach day $days {
+        while {1} {
+            set rule [user_prompt $cli_group "$day backup type" "daily"]
+            if {[lsearch -exact {monthly weekly daily none} $rule] != -1} {
+                set rules($day) $rule
+                break
+            } else {
+                puts [appUtils::colorize {red} \
+                    "Invalid choice. Use: monthly, weekly, daily, or none"]
             }
-
-            # Store rules in class structure
-            set config(rulesMon) $rules(Mon)
-            set config(rulesTue) $rules(Tue)
-            set config(rulesWed) $rules(Wed)
-            set config(rulesThu) $rules(Thu)
-            set config(rulesFri) $rules(Fri)
-            set config(rulesSat) $rules(Sat)
-            set config(rulesSun) $rules(Sun)
-        } error]
-    } {
-        config_error "inputValidation" "Schedule configuration: $error"
+        }
     }
+
+    # Create the temporary global group from the local 'rules' array.
+    set temp_group_name "_temp_schedule_[clock clicks]"
+    group::create $temp_group_name [array get rules]
+
+    # Return the name of the temporary group.
+    return $temp_group_name
 }
 
-proc storage_gather {class} {
+proc storage_gather {cli_group} {
     #
     # ARGS
-    # class           in/out          configuration class to populate
+    # cli_group     in      The name of the global CLI group, used for context
+    #                       and for retrieving default values.
     #
     # DESC
-    # Configures storage paths and tape set counts using class structure
+    # Interactively gathers storage path and tape set count information.
+    # It bundles this data into a new, temporary group object and returns
+    # the unique name of that temporary group for the caller to process.
+    # This procedure is "stateless" and does not modify any external groups.
     #
-    upvar $class config
-    global output_dir daily_sets weekly_sets monthly_sets color
-    global DEFAULT_DAILY_SETS DEFAULT_WEEKLY_SETS DEFAULT_MONTHLY_SETS
-
-    puts "\n$color(blue)$color(bold)=== Configuring Storage ===$color(reset)"
-
-    if {
-        [catch {
-            set config(workingDir) \
-                [user_prompt "Log directory" "/root/backup_logs" directory_validate]
-            set config(archiveDir) \
-                [user_prompt "Archive storage directory" $output_dir directory_validate]
-            set config(listFileDir) \
-                [user_prompt "Incremental file list directory" "/tmp/backup_lists"]
-
-            # Configure tape set counts
-            if {$daily_sets == ""} {
-                set daily_sets [user_prompt "Daily backup sets" $DEFAULT_DAILY_SETS]
-            }
-            set config(dailySets) $daily_sets
-
-            if {$weekly_sets == ""} {
-                set weekly_sets [user_prompt "Weekly backup sets" $DEFAULT_WEEKLY_SETS]
-            }
-            set config(weeklySets) $weekly_sets
-
-            if {$monthly_sets == ""} {
-                set monthly_sets [user_prompt "Monthly backup sets" $DEFAULT_MONTHLY_SETS]
-            }
-            set config(monthlySets) $monthly_sets
-        } error]
-    } {
-        config_error "directoryAccess" "Storage configuration: $error"
-    }
-}
-
-proc notifications_gather {class} {
+    # RETURN
+    # Returns the unique global name of the temporary group as a string.
     #
-    # ARGS
-    # class           in/out          configuration class to populate
-    #
-    # DESC
-    # Configures notification settings using class structure
-    #
-    upvar $class config
-    global color
+    upvar #0 $cli_group cli
 
-    puts "\n$color(blue)$color(bold)=== Configuring Notifications ===$color(reset)"
+    puts [appUtils::colorize {bold blue} "\n=== Configuring Storage ==="]
 
-    if {
-        [catch {
-            set config(adminUser) \
-                [user_prompt "Admin email address" "" email_validate]
-            set config(notifyTape) \
-                [user_prompt "Tape notification command" "echo 'Starting backup operation'"]
-            set config(notifyTar) \
-                [user_prompt "Archive notification command" "echo 'Starting archive creation'"]
-            set config(notifyError) \
-                [user_prompt "Error notification command" "echo 'Backup error occurred'"]
-        } error]
-    } {
-        config_error "inputValidation" "Notification configuration: $error"
-    }
-}
+    # --- Step 1: Gather all data into a local key-value list ---
+    set kv_list [list]
 
-proc objectFile_generate {class} {
-    #
-    # ARGS
-    # class           in              populated configuration class
-    #
-    # DESC
-    # Generates .object file using your established class structure and format
-    #
-    upvar $class config
-    global output_dir color
+    set logDir [user_prompt $cli_group "Log directory" "/tmp/backup_logs" directory_validate]
+    lappend kv_list logDir $logDir
 
-    set filename "$output_dir/$config(name).object"
+    # Use the output-dir from the CLI as the default for the archive directory.
+    set archiveDir \
+        [user_prompt $cli_group "Archive storage directory" $cli(output-dir) directory_validate]
+    lappend kv_list archiveDir $archiveDir
 
-    message_log "INFO" "Generating configuration file: $filename"
+    set listFileDir [user_prompt $cli_group "Incremental file list directory" "/tmp/backup_lists"]
+    lappend kv_list listFileDir $listFileDir
 
-    if {[catch {open $filename w} fileID]} {
-        config_error "fileCreate" "Cannot create file $filename: $fileID"
-    }
-
-    if {
-        [catch {
-            puts $fileID "name>$config(name)"
-            puts $fileID "archiveDate>[clock format [clock seconds]]"
-            puts $fileID "workingDir>$config(workingDir)"
-            puts $fileID "currentRule>none"
-            puts $fileID "remoteHost>$config(managerHost)"
-            puts $fileID "remoteUser>$config(managerUser)"
-            puts $fileID "remoteDevice>$config(archiveDir)"
-            puts $fileID "rsh>ssh"
-            puts $fileID "adminUser>$config(adminUser)"
-            puts $fileID "notifyTape>$config(notifyTape)"
-            puts $fileID "notifyTar>$config(notifyTar)"
-            puts $fileID "notifyError>$config(notifyError)"
-            puts $fileID "partitions>$config(partitions)"
-            puts $fileID "listFileDir>$config(listFileDir)"
-            puts $fileID "status>"
-            puts $fileID "command>"
-
-            # Add current/total set counts
-            puts $fileID "currentSet,daily>0"
-            puts $fileID "currentSet,weekly>0"
-            puts $fileID "currentSet,monthly>0"
-            puts $fileID "currentSet,none>0"
-            puts $fileID "totalSet,daily>$config(dailySets)"
-            puts $fileID "totalSet,weekly>$config(weeklySets)"
-            puts $fileID "totalSet,monthly>$config(monthlySets)"
-            puts $fileID "totalSet,none>0"
-
-            # Add schedule rules
-            puts $fileID "rules,Mon>$config(rulesMon)"
-            puts $fileID "rules,Tue>$config(rulesTue)"
-            puts $fileID "rules,Wed>$config(rulesWed)"
-            puts $fileID "rules,Thu>$config(rulesThu)"
-            puts $fileID "rules,Fri>$config(rulesFri)"
-            puts $fileID "rules,Sat>$config(rulesSat)"
-            puts $fileID "rules,Sun>$config(rulesSun)"
-
-            close $fileID
-        } error]
-    } {
-        catch {close $fileID}
-        config_error "fileCreate" "Failed to write configuration file: $error"
-    }
-
-    puts "\n$color(green)Configuration file created: $filename$color(reset)"
-}
-
-###\\\
-# Configuration class structure definition
-###///
-
-proc configClass_struct {} {
-    #
-    # DESC
-    # Define the structure for backup configuration class using your
-    # established pseudo-OOP pattern
-    #
-    set classStruct {
-        name
-        description
-        managerHost
-        managerPort
-        managerUser
-        targetHosts
-        directories
-        partitions
-        workingDir
-        archiveDir
-        remoteScriptDir
-        listFileDir
-        dailySets
-        weeklySets
-        monthlySets
-        adminUser
-        notifyTape
-        notifyTar
-        notifyError
-        rshCommand
-        scheduleType
-        rulesMon
-        rulesTue
-        rulesWed
-        rulesThu
-        rulesFri
-        rulesSat
-        rulesSun
-    }
-    return $classStruct
-}
-
-###\\\
-# Main execution using your parval system
-###///
-
-proc off {} {
-    # Validate error dictionary before proceeding
-    errors_validate
-
-    # Setup colors IMMEDIATELY after functions are defined
-    colors_setup
-
-    # Initialize parval for command line parsing
-    set arr_PARVAL(0) 0
-    if {[catch {PARVAL_build clargs $argv "--"} error]} {
-        config_error "invalidArgs" "Failed to initialize command line parser: $error"
-    }
-
-    # Parse all command line arguments using your parval system
-    foreach element $lst_commargs {
-        if {[catch {PARVAL_interpret clargs $element} error]} {
-            config_error "invalidArgs" "Failed to parse argument '$element': $error"
-        }
-
-        if {$arr_PARVAL(clargs,argnum) >= 0} {
-            switch -- $element {
-                "create" {
-                    set config_name $arr_PARVAL(clargs,value)
-                }
-                "template" {
-                    set template_type $arr_PARVAL(clargs,value)
-                    set valid_templates {server desktop database minimal}
-                    if {[lsearch $valid_templates $template_type] == -1} {
-                        config_error "invalidArgs" "Invalid template \
-                            '$template_type'. Valid: [join $valid_templates {, }]"
-                    }
-                }
-                "output-dir" {
-                    set output_dir $arr_PARVAL(clargs,value)
-                }
-                "non-interactive" {
-                    set non_interactive 1
-                }
-                "daily-sets" {
-                    set daily_sets $arr_PARVAL(clargs,value)
-                    if {![string is integer $daily_sets] || $daily_sets < 1} {
-                        config_error "invalidArgs" \
-                            "Daily sets must be positive integer, got: $daily_sets"
-                    }
-                }
-                "weekly-sets" {
-                    set weekly_sets $arr_PARVAL(clargs,value)
-                    if {![string is integer $weekly_sets] || $weekly_sets < 1} {
-                        config_error "invalidArgs" \
-                            "Weekly sets must be positive integer, got: $weekly_sets"
-                    }
-                }
-                "monthly-sets" {
-                    set monthly_sets $arr_PARVAL(clargs,value)
-                    if {![string is integer $monthly_sets] || $monthly_sets < 1} {
-                        config_error "invalidArgs" \
-                            "Monthly sets must be positive integer, got: $monthly_sets"
-                    }
-                }
-                "validate-only" {
-                    set validate_only 1
-                }
-                "no-color" {
-                    set no_color 1
-                }
-                "help" {
-                    set show_help 1
-                }
-            }
-        }
-    }
-
-    if {$show_help} {
-        synopsis_show
-    }
-
-    if {$config_name == ""} {
-        config_error "invalidArgs" "Backup name required (use --create <name>)"
-    }
-
-    message_log "INFO" "Starting backup configuration wizard for '$config_name'"
-
-    # Prompt for output directory if interactive and not specified
-    if {!$non_interactive && $output_dir == "/root/backup_data"} {
-        set output_dir [user_prompt "Output directory" "/tmp/backup_configs" directory_validate]
-    }
-
-    # Create output directory if it doesn't exist
-    if {![file exists $output_dir]} {
-        message_log "INFO" "Creating output directory: $output_dir"
-        if {[catch {file mkdir $output_dir} error]} {
-            config_error "directoryAccess" "Cannot create output directory '$output_dir': $error"
-        }
-    }
-
-    # Initialize configuration class using your class system
-    set lst_base_struct [configClass_struct]
-    if {
-        [catch {
-            class_Initialise configClass $lst_base_struct {} void
-        } error]
-    } {
-        config_error "classInit" "Failed to initialize configuration class: $error"
-    }
-
-    # Load template if specified using your class system
-    if {$template_type != ""} {
-        if {[catch {template_load $template_type configClass} error]} {
-            config_error "templateLoad" "Failed to load template: $error"
-        }
+    # --- Configure tape set counts ---
+    # If a value was provided on the command line, use it. Otherwise, prompt the user.
+    if {$cli(daily-sets) ne ""} {
+        set daily_sets $cli(daily-sets)
     } else {
-        if {[catch {template_load "default" configClass} error]} {
-            config_error "templateLoad" "Failed to load default template: $error"
-        }
+        set daily_sets [user_prompt $cli_group "Daily backup sets" $cli(daily-sets)]
     }
+    lappend kv_list dailySets $daily_sets
 
-    # Gather configuration using your class-based approach
-    if {
-        [catch {
-            basicInfo_gather configClass
-            targetHosts_gather configClass
-            schedule_gather configClass
-            storage_gather configClass
-            notifications_gather configClass
-        } error]
-    } {
-        config_error "inputValidation" "Configuration gathering failed: $error"
-    }
-
-    # Generate configuration file
-    if {!$validate_only} {
-        if {[catch {objectFile_generate configClass} error]} {
-            config_error "fileCreate" "Object file generation failed: $error"
-        }
+    if {$cli(weekly-sets) ne ""} {
+        set weekly_sets $cli(weekly-sets)
     } else {
-        message_log "INFO" "Validation complete (no file generated)"
+        set weekly_sets [user_prompt $cli_group "Weekly backup sets" $cli(weekly-sets)]
     }
+    lappend kv_list weeklySets $weekly_sets
 
-    message_log "INFO" "Configuration wizard completed successfully"
+    if {$cli(monthly-sets) ne ""} {
+        set monthly_sets $cli(monthly-sets)
+    } else {
+        set monthly_sets [user_prompt $cli_group "Monthly backup sets" $cli(monthly-sets)]
+    }
+    lappend kv_list monthlySets $monthly_sets
+
+    # --- Step 2: Create the temporary global group ---
+    set temp_group_name "_temp_storage_[clock clicks]"
+    group::create $temp_group_name $kv_list
+
+    # --- Step 3: Return the name of the temporary group ---
+    return $temp_group_name
 }
 
-proc class_cliBuild {class parval} {
-    # parval    in  the context of the command line interpreter
+proc notifications_gather {cli_group} {
     #
-    upvar $class cli
+    # ARGS
+    # cli_group     in      The name of the global CLI group, used for context.
+    #
+    # DESC
+    # Interactively gathers notification settings (email, commands).
+    # It bundles this data into a new, temporary group object and returns
+    # the unique name of that temporary group. This procedure is "stateless."
+    #
+    # RETURN
+    # Returns the unique global name of the temporary group as a string.
+    #
+    puts [appUtils::colorize {bold blue} "\n=== Configuring Notifications ==="]
+
+    # --- Step 1: Gather all data into a local key-value list ---
+    set kv_list [list]
+
+    set adminUser [user_prompt $cli_group "Admin email address" "" email_validate]
+    lappend kv_list adminUser $adminUser
+
+    set notifyTape \
+        [user_prompt $cli_group "Tape notification command" "echo 'Starting backup operation'"]
+    lappend kv_list notifyTape $notifyTape
+
+    set notifyTar \
+        [user_prompt $cli_group "Archive notification command" "echo 'Starting archive creation'"]
+    lappend kv_list notifyTar $notifyTar
+
+    set notifyError \
+        [user_prompt $cli_group "Error notification command" "echo 'Backup error occurred'"]
+    lappend kv_list notifyError $notifyError
+
+    # --- Step 2: Create the temporary global group ---
+    set temp_group_name "_temp_notifications_[clock clicks]"
+    group::create $temp_group_name $kv_list
+
+    # --- Step 3: Return the name of the temporary group ---
+    return $temp_group_name
+}
+
+proc group_cliBuild {group_name parval} {
+    #
+    # ARGS
+    # group_name  in      The global name of the group to create (e.g., "ccli").
+    # parval      in      The context of the command line interpreter.
+    #
+    # DESC
+    # Builds a group object from command-line arguments. It is data-driven,
+    # constructing its list of keys and default values directly from the
+    # global 'lst_members_flags_defaults' matrix, making it the single
+    # source of truth for CLI argument definitions.
+    #
     global lst_members_flags_defaults
 
-    set lst_memberVars {}
-    set lst_commargs {}
-    set lst_commvalues {}
+    set lst_keys {}
+    set lst_values {}
 
-    list_unzipTriplets $lst_members_flags_defaults lst_memberVars lst_commargs lst_commvalues
+    # Iterate through the global matrix to build our key and value lists.
+    # This is an idiomatic Tcl way to process a flat list of triplets.
+    foreach {member_var flag default_val} $lst_members_flags_defaults {
+        # The key for our group will be the command-line flag itself.
+        lappend lst_keys $flag
 
-    # Define the list of all possible command-line flags
-    set lst_commargs {
-        create template output-dir
-        daily-sets weekly-sets monthly-sets
-        non-interactive validate-only no-color help
+        # Now, get the value from the command line, using the default
+        # from our matrix if the user didn't provide the flag.
+        lappend lst_values [PARVAL_return $parval $flag $default_val]
     }
 
-    # Create a list to hold the values passed on the command line
-    set lst_commvalues {}
-
-    # Loop through each possible flag and get its value from the command line
-    foreach flag $lst_commargs {
-        # PARVAL_return will get the value, or an empty string if not present
-        # For boolean flags like --help, it will return "1" if present.
-        set val [PARVAL_return $parval $flag ""]
-        lappend lst_commvalues [PARVAL_return $parval $flag ""]
-    }
-
-    # Now, create the 'cli' class using the flags as keys and the parsed values
-    class_Initialise cli $lst_memberVars $lst_commvalues
-    class_Dump cli
+    # Call the constructor with our dynamically generated lists.
+    group::createFromLists $group_name $lst_keys $lst_values
 }
 
+proc cliArgs_validate {group_name parval_name} {
+    #
+    # ARGS
+    # group_name    in      The name of the CLI group object to validate.
+    # parval_name   in      The name of the PARVAL object with the parse results.
+    #
+    # DESC
+    # Iterates over the flags passed on the command line and validates the
+    # corresponding values in the provided group object.
+    #
+    # RETURN
+    # Returns 1 if all validations pass, 0 otherwise.
+    #
+    upvar #0 $group_name ccli
+
+    # We iterate over the flags the user actually provided.
+    foreach flag [PARVAL_passedFlags $parval_name] {
+        switch -- $flag {
+            "template" {
+                set valid_templates {server desktop database minimal}
+                if {[lsearch -exact $valid_templates $ccli(template)] == -1} {
+                    appUtils::errorLog "invalidArgs" \
+                        "Invalid template '$ccli(template)'. Valid: [join $valid_templates {, }]"
+                    return 0
+                }
+            }
+            "daily-sets" {
+                if {![string is integer $ccli(daily-sets)] || $ccli(daily-sets) < 1} {
+                    appUtils::errorLog "invalidArgs" \
+                        "Daily sets must be a positive integer, got: '$ccli(daily-sets)'"
+                    return 0
+                }
+            }
+            "weekly-sets" {
+                if {![string is integer $ccli(weekly-sets)] || $ccli(weekly-sets) < 1} {
+                    appUtils::errorLog "invalidArgs" \
+                        "Weekly sets must be a positive integer, got: '$ccli(weekly-sets)'"
+                    return 0
+                }
+            }
+            "monthly-sets" {
+                if {![string is integer $ccli(monthly-sets)] || $ccli(monthly-sets) < 1} {
+                    appUtils::errorLog "invalidArgs" \
+                        "Monthly sets must be a positive integer, got: '$ccli(monthly-sets)'"
+                    return 0
+                }
+            }
+        }
+    }
+    if {$ccli(create) == ""} {
+        appUtils::errorLog "invalidArgs" "Backup name required (use --create <name>)"
+    }
+    # If the loop completes without returning, all validations passed.
+    return 1
+}
+
+proc outputDir_resolveAndCreate {group_name} {
+    #
+    # ARGS
+    # group_name    in      The name of the CLI group object.
+    #
+    # DESC
+    # Resolves the output directory. If in interactive mode and no directory
+    # was specified on the command line, it prompts the user for one.
+    # It then ensures the final directory exists, creating it if necessary.
+    #
+    upvar #0 $group_name ccli
+
+    # Check if the value is an empty string, which indicates
+    # it was not provided on the command line.
+    if {!$ccli(non-interactive) && $ccli(output-dir) eq ""} {
+        set ccli(output-dir) \
+            [user_prompt ccli \
+                "Output directory (for .object config)" "/tmp/backup_archives" directory_validate]
+    }
+
+    # After resolving, ensure the directory exists.
+    if {![file exists $ccli(output-dir)]} {
+        appUtils::log "INFO" "Creating output directory: $ccli(output-dir)"
+        if {[catch {file mkdir $ccli(output-dir)} error]} {
+            appUtils::errorLog \
+                "directoryAccess" "Cannot create output directory '$ccli(output-dir)': $error"
+        }
+    }
+}
+
+proc user_promptAndVerify {gather_proc cli_group archive_group sub_group_key {order_list ""} args} {
+    #
+    # ARGS
+    # gather_proc   in      The name of the data-gathering procedure to call.
+    # cli_group     in      The name of the global CLI group, used for context.
+    # archive_group in/out  The name of the main config group to be modified.
+    # sub_group_key in      The key under which the new data should be composed.
+    # order_list    in (opt) A list of keys to specify the display order.
+    # args          in      A list of any additional arguments to pass to the gather_proc.
+    #
+    # DESC
+    # A higher-order procedure that wraps a data-gathering function in a
+    # user confirmation loop. It calls the gatherer, displays the result,
+    # asks for confirmation, and then composes the data into the main archive.
+    #
+    while {1} {
+        # Execute the data-gathering proc, passing along any extra arguments.
+        set temp_group_name [$gather_proc $cli_group {*}$args]
+
+        # --- User Confirmation Step ---
+        puts [appUtils::colorize {bold blue} "\n--- Please Confirm ---"]
+        print_inTable $temp_group_name $order_list
+
+        set confirmation [user_prompt $cli_group "Is this correct? (y/n)" "y"]
+
+        # Helper to safely clean up the temporary group.
+        proc _cleanup_temp_group {name} {
+            catch {unset $name}
+            catch {rename $name {}}
+        }
+
+        if {[string tolower [string index $confirmation 0]] eq "y"} {
+            # User confirmed. Compose the temp group into the main one.
+            group::add $archive_group $sub_group_key @$temp_group_name
+            _cleanup_temp_group $temp_group_name
+            break
+        }
+
+        # User rejected. Clean up and the loop will repeat.
+        _cleanup_temp_group $temp_group_name
+        puts [appUtils::colorize {yellow} "Okay, let's try that again..."]
+    }
+}
+
+proc config_process {cli archive} {
+    #
+    # ARGS
+    # cli       in      The name of the global CLI group.
+    # archive   in/out  The name of the main config group to be populated.
+    #
+    # DESC
+    # The main orchestrator for the interactive configuration wizard.
+    #
+    upvar #0 $cli ccli
+
+    appUtils::log "INFO" "Starting backup configuration wizard for '$ccli(create)'"
+    set schedule_order {Mon Tue Wed Thu Fri Sat Sun}
+
+    if {
+        [catch {
+            outputDir_resolveAndCreate $cli
+
+            user_promptAndVerify metaInfo_gather $cli $archive "meta"
+            user_promptAndVerify managerInfo_gather $cli $archive "manager"
+            user_promptAndVerify targetHosts_gather $cli $archive "targets"
+            user_promptAndVerify workerInfo_gather $cli $archive "worker" "" $archive
+            user_promptAndVerify schedule_gather $cli $archive "schedule" $schedule_order
+            user_promptAndVerify storage_gather $cli $archive "storage"
+            user_promptAndVerify notifications_gather $cli $archive "notifications"
+        } error]
+    } {
+        appUtils::errorLog "inputValidation" "Configuration wizard failed: $error"
+    }
+    appUtils::log "INFO" "Configuration wizard completed successfully"
+}
+
+proc print_inTable {group {order_list ""}} {
+    #
+    # ARGS
+    # group         in      The name of the group object to print.
+    # order_list    in (opt) A list of keys to specify the display order.
+    #                        If empty, the table is sorted alphabetically.
+    #
+    # DESC
+    # A helper procedure that prints a group object to the console as a
+    # nicely formatted and colorized ASCII table.
+    #
+    set table_color_options [list \
+        -headerKeyColor {bold yellow} \
+        -headerValColor {bold yellow} \
+        -bodyKeyColor {cyan} \
+        -bodyValColor {green}]
+
+    # If a specific order was requested, add it to the options.
+    if {$order_list ne ""} {
+        lappend table_color_options -order $order_list
+    }
+
+    # Use the 'toTable' command with all the defined options.
+    puts [group::toTable $group {*}$table_color_options]
+}
+
+proc archiveSet_save {group} {
+    upvar #0 $group archive
+    set archiveName [file join $archive(storage,archiveDir) ${archive(meta,name)}.yaml]
+    if {
+        [catch {
+            group::toYaml $group %$archiveName
+        } error]
+    } {
+        appUtils::errorLog "objSave" "While saving archive control data: $error"
+    }
+    appUtils::log "INFO" "Archive object file saved to $archiveName"
+}
+
+###\\\
+# Main execution
+###///
+
 proc main {} {
-    global argv G_SYNOPSIS
+    global argv BACKUP_CONFIG_SYNOPSIS
+    global ccli
+    global backup
+    group::create ccli {}
+    group::create backup {}
 
     if {![CLI_parse "clargs" $argv]} {
         exit 1
     }
 
-    if {[PARVAL_return "clargs" "help"]} {
-        exit_with $G_SYNOPSIS
+    if {[PARVAL_return "clargs" "help" 0]} {
+        exit_with $BACKUP_CONFIG_SYNOPSIS 1
     }
 
-    errors_validate
-    colors_setup
-    class_cliBuild ccli clargs
+    group_cliBuild ccli clargs
 
-    foreach flag [PARVAL_passedFlags "clargs"] {
-        puts $flag
-        switch -- $flag {
-            "create" {
-                set config_name [PARVAL_return "clargs" "create"]
-            }
-            "template" {
-                set template_type [PARVAL_return "clargs" "template"]
-                set valid_templates {server desktop database minimal}
-                if {[lsearch $valid_templates $template_type] == -1} {
-                    config_error "invalidArgs" \
-                        "Invalid template '$template_type'. Valid: [join $valid_templates {, }]"
-                }
-            }
-            "output-dir" {
-                set output_dir [PARVAL_return "clargs" "output-dir"]
-            }
-            "non-interactive" {
-                set non_interactive 1
-            }
-            "daily-sets" {
-                set daily_sets [PARVAL_return "clargs" "daily-sets"]
-                if {![string is integer $daily_sets] || $daily_sets < 1} {
-                    config_error "invalidArgs" \
-                        "Daily sets must be positive integer, got: $daily_sets"
-                }
-            }
-            "weekly-sets" {
-                set weekly_sets [PARVAL_return "clargs" "weekly-sets"]
-                if {![string is integer $weekly_sets] || $weekly_sets < 1} {
-                    config_error "invalidArgs" \
-                        "Weekly sets must be positive integer, got: $weekly_sets"
-                }
-            }
-            "monthly-sets" {
-                set monthly_sets [PARVAL_return "clargs" "monthly-sets"]
-                if {![string is integer $monthly_sets] || $monthly_sets < 1} {
-                    config_error "invalidArgs" \
-                        "Monthly sets must be positive integer, got: $monthly_sets"
-                }
-            }
-            "validate-only" {
-                set validate_only 1
-            }
-            "no-color" {
-                set no_color 1
-            }
-            "help" {
-                synopsis_show
-            }
-        }
+
+    if {![cliArgs_validate ccli clargs]} {
+        exit 1
     }
+
+    config_process ccli backup
+    puts [group::toYaml backup]
+    archiveSet_save backup
+
+    # print_inTable backup
 }
 
 # Run main if called directly
